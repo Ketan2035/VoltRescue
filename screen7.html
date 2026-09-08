@@ -1,0 +1,363 @@
+<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>ChargeOn Wheels - Active Session</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Geist:wght@500&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Inter:wght@100..900&amp;display=swap" rel="stylesheet">
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(19, 19, 19, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .neon-pulse {
+            box-shadow: 0 0 15px rgba(42, 229, 0, 0.4);
+            animation: pulse 2s infinite ease-in-out;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.02); }
+        }
+        .charging-shimmer {
+            background: linear-gradient(90deg, transparent, rgba(42, 229, 0, 0.2), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite linear;
+        }
+        @keyframes shimmer {
+            from { background-position: 200% 0; }
+            to { background-position: -200% 0; }
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-container": "#4b8eff",
+                        "surface-variant": "#353534",
+                        "tertiary": "#c6c6c7",
+                        "secondary-fixed": "#79ff5b",
+                        "surface-dim": "#131313",
+                        "secondary": "#d7ffc5",
+                        "background": "#131313",
+                        "inverse-on-surface": "#313030",
+                        "surface-bright": "#393939",
+                        "error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-surface": "#e5e2e1",
+                        "secondary-fixed-dim": "#2ae500",
+                        "primary": "#adc6ff",
+                        "primary-fixed": "#d8e2ff",
+                        "on-tertiary": "#2f3131",
+                        "on-secondary-fixed-variant": "#095300",
+                        "on-error-container": "#ffdad6",
+                        "on-surface-variant": "#c1c6d7",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "on-secondary-fixed": "#022100",
+                        "on-tertiary-container": "#282a2a",
+                        "tertiary-container": "#909191",
+                        "surface-tint": "#adc6ff",
+                        "on-secondary-container": "#0f6d00",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "secondary-container": "#2ff801",
+                        "on-primary-fixed-variant": "#004493",
+                        "on-primary-container": "#00285c",
+                        "on-error": "#690005",
+                        "primary-fixed-dim": "#adc6ff",
+                        "inverse-surface": "#e5e2e1",
+                        "outline": "#8b90a0",
+                        "on-primary": "#002e69",
+                        "surface-container-low": "#1c1b1b",
+                        "on-primary-fixed": "#001a41",
+                        "tertiary-fixed": "#e2e2e2",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-secondary": "#053900",
+                        "inverse-primary": "#005bc1",
+                        "surface-container-highest": "#353534",
+                        "outline-variant": "#414755",
+                        "on-background": "#e5e2e1",
+                        "surface": "#131313",
+                        "surface-container": "#201f1f",
+                        "surface-container-high": "#2a2a2a",
+                        "error": "#ffb4ab"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "container-max": "1280px",
+                        "unit": "4px",
+                        "margin-mobile": "20px",
+                        "margin-desktop": "40px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Inter"],
+                        "display-lg-mobile": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-sm": ["Geist"],
+                        "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "display-lg-mobile": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "letterSpacing": "0", "fontWeight": "400"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "letterSpacing": "0", "fontWeight": "400"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen font-body-md text-body-md overflow-x-hidden">
+<!-- Top Navigation Bar (Shared Component) -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-surface-dim/80 backdrop-blur-xl border-b border-white/10 shadow-sm flex items-center justify-between px-margin-mobile py-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-3xl">battery_charging_full</span>
+<h1 class="font-display-lg-mobile text-display-lg-mobile font-bold text-primary tracking-tighter" style="text-shadow: rgba(42, 229, 0, 0.1) 0px 0px 5px;">VoltRescue</h1>
+</div>
+<div class="w-10 h-10 rounded-full bg-surface-container-high border border-outline-variant overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Close up profile portrait of a modern electric vehicle enthusiast in a futuristic setting, soft glowing lights reflecting in high-tech glasses, premium aesthetic, deep obsidian and electric blue lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA82163FgUl_3-7nqROL9gb4O1RqQSGweX0ViiRC2Hw5bVEq3pcAavwe_Hx31qFZRb9XVxJjjxiZPDGO34c-wXgNni5rO6AVhh4ERbpbmyKIqefXAQ6bnC3zGeMoA1_LjLamDaWqb5xZqhvouYVOu35Zr8dzgu4mL5yTfe9vbR7-WvFaHqxl2L8nJxbEFUgJBJnNngsdtATxgAmIuEEP0mjb9nkHZ2ySKy040ckCisCm4rHnTS-O0xbQkPsPXGcVzbQLha8CzxjkG-2">
+</div>
+</header>
+<main class="pt-24 pb-32 px-margin-mobile max-w-container-max mx-auto space-y-8">
+<!-- Hero: Vehicle Charging Visual -->
+<section class="relative h-64 md:h-96 rounded-3xl overflow-hidden glass-card group">
+<div class="absolute inset-0 z-0">
+<img class="w-full h-full object-cover opacity-60" data-alt="A sleek, high-performance silver electric sedan parked at a modern roadside charging bay during twilight. A glowing green energy cable is connected to the car. The scene is illuminated with futuristic cyan and neon green lights against a dark, minimalist highway background. Ultra-realistic cinematic 8k render." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCVe6yVDY9H9ZHOUdsitcPTq-YHl_kbkWWKco17rKNF7Zrt2bpRTJkuJpPSHd7LsaMxmkgIj8BBJm-bdZNY8rY2EgFkyjgKEpo5SClNfS7lMHv6eCwUMQgD47V2WyP2C1dht49CsnS1G7HpEpVUbzvPRiu1dX0hA5Wm2y--UYKPL_g842_vcdHihA6D7b7uBi77Fi8F6eVi5lzj0AvTdjR33Zi0b4bv-6BCBAyA6QPSYin07JkvbzcSmiDDFZs7CHqHjTePXdQlGi9L">
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
+<div class="relative z-10 p-6 flex flex-col justify-end h-full">
+<div class="flex items-center gap-2 mb-2">
+<span class="w-2 h-2 bg-secondary-fixed-dim rounded-full animate-ping"></span>
+<span class="font-label-sm text-label-sm text-secondary-fixed uppercase tracking-widest">Active Connection</span>
+</div>
+<h2 class="font-headline-md text-headline-md-mobile text-on-surface">Model S - Red Ghost</h2>
+</div>
+</section>
+<!-- Bento Layout for Stats and Progress -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- Charging Progress Card -->
+<div class="md:col-span-7 lg:col-span-8 glass-card rounded-3xl p-8 flex flex-col items-center justify-center space-y-6 relative overflow-hidden">
+<!-- Background Atmospheric Glow -->
+<div class="absolute -top-24 -left-24 w-64 h-64 bg-secondary-fixed-dim/10 rounded-full blur-[100px]"></div>
+<!-- Replace Static Ring with 3D Scene -->
+<div class="relative w-full h-[300px] flex items-center justify-center">
+<!-- STITCH_THREEJS_START:ANIMATION_83 class="w-full h-full bg-transparent" -->
+<div class="w-full h-full bg-transparent" style="display:block;">
+<script src="https://ajax.googleapis.com/ajax/libs/threejs/r125/three.min.js"></script>
+<div id="threejs-container-ANIMATION_83" style="width:100%;height:100%"></div>
+<script>
+(function() {
+  const container = document.getElementById('threejs-container-ANIMATION_83');
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  const width = container.clientWidth || window.innerWidth;
+const height = container.clientHeight || window.innerHeight;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+renderer.setSize(width, height);
+renderer.setPixelRatio(window.devicePixelRatio);
+container.appendChild(renderer.domElement);
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+scene.add(ambientLight);
+const pointLight = new THREE.PointLight(0x00ff00, 2, 100);
+pointLight.position.set(5, 5, 5);
+scene.add(pointLight);
+
+// Creating a "Pulse" geometry to represent energy/charging
+const group = new THREE.Group();
+const ringCount = 3;
+const rings = [];
+
+for (let i = 0; i < ringCount; i++) {
+    const geometry = new THREE.TorusGeometry(2 + i * 0.5, 0.05, 16, 100);
+    const material = new THREE.MeshPhongMaterial({ 
+        color: 0x2ae500, 
+        transparent: true, 
+        opacity: 0.8 - (i * 0.2),
+        emissive: 0x2ae500,
+        emissiveIntensity: 0.5
+    });
+    const ring = new THREE.Mesh(geometry, material);
+    rings.push(ring);
+    group.add(ring);
+}
+scene.add(group);
+
+camera.position.z = 8;
+
+// Animation
+function animate() {
+    requestAnimationFrame(animate);
+    
+    group.rotation.x += 0.01;
+    group.rotation.y += 0.015;
+    
+    rings.forEach((ring, index) => {
+        const scale = 1 + Math.sin(Date.now() * 0.002 + index) * 0.1;
+        ring.scale.set(scale, scale, scale);
+        ring.material.opacity = (0.6 + Math.sin(Date.now() * 0.003 + index) * 0.4) * (1 - index/ringCount);
+    });
+    
+    renderer.render(scene, camera);
+}
+
+animate();
+
+window.addEventListener('resize', () => {
+    const w = container.clientWidth || window.innerWidth;
+    const h = container.clientHeight || window.innerHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+});
+})();
+</script>
+</div>
+<!-- STITCH_THREEJS_END:ANIMATION_83 -->
+<!-- Center Overlay Content -->
+<div class="absolute flex flex-col items-center pointer-events-none">
+<span class="font-display-lg-mobile text-display-lg-mobile text-on-surface font-bold">70%</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Charging...</span>
+</div>
+</div>
+<div class="flex gap-12 text-center w-full justify-center">
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-1">Range Added</p>
+<p class="font-headline-md text-headline-md-mobile text-primary">+142 mi</p>
+</div>
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-1">Voltage</p>
+<p class="font-headline-md text-headline-md-mobile text-primary">800V</p>
+</div>
+</div>
+</div>
+<!-- Real-time Stats Column -->
+<div class="md:col-span-5 lg:col-span-4 space-y-6">
+<!-- Power Delivery -->
+<div class="glass-card rounded-3xl p-6 relative overflow-hidden">
+<div class="charging-shimmer absolute inset-0 opacity-10"></div>
+<div class="flex items-center justify-between mb-4">
+<span class="material-symbols-outlined text-secondary-fixed-dim" style="font-variation-settings: 'FILL' 1;">bolt</span>
+<span class="bg-secondary-fixed-dim/10 text-secondary-fixed-dim px-3 py-1 rounded-full font-label-sm text-label-sm">High Speed</span>
+</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase">Power Delivered</p>
+<p class="font-display-lg-mobile text-display-lg-mobile text-on-surface">124 <span class="text-headline-md-mobile font-normal text-on-surface-variant">kW</span></p>
+</div>
+<!-- Time & Cost Grid -->
+<div class="grid grid-cols-2 gap-4">
+<div class="glass-card rounded-3xl p-6">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-2">Time Left</p>
+<p class="font-headline-md text-headline-md-mobile text-on-surface">14<span class="text-body-md text-on-surface-variant ml-1">min</span></p>
+</div>
+<div class="glass-card rounded-3xl p-6">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-2">Current Cost</p>
+<p class="font-headline-md text-headline-md-mobile text-on-surface">$12.45</p>
+</div>
+</div>
+<!-- Emergency Stop -->
+<button class="w-full bg-on-error-container text-on-error py-5 rounded-3xl font-bold flex items-center justify-center gap-3 active:scale-95 transition-transform shadow-lg">
+<span class="material-symbols-outlined">stop_circle</span>
+                EMERGENCY STOP
+            </button>
+</div>
+</div>
+<!-- Operator Details Card -->
+<section class="glass-card rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-2xl bg-surface-container-high border border-outline-variant overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Close up professional portrait of a tech support operator in a clean minimalist environment, warm lighting, futuristic customer service theme, wearing a sleek headset, high-quality digital photography." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBh0AxaraHMtDSrDFlj7vC9h0IGYWTfTcJZQUltOtqE9M-YBye8xbDegmd4v7kTq3utlp9O-GWR6vV791EzwIx2G1VTTSZI6ldzlkzVIr83-5ttRi0ZeOpgrzfNgirob0NCv0GMEW1HFBgf9Mf6UrlgbzzBy4gKJzS-a0PoEbSOHpDQBLYaWXPu2XIF3HRUp3X12vPnHcAf5o_DzEJZc6K4Yj9tvYLGxUVtUk5DH18p0bJ6aVwLa_tJ4WpTR2xxFvszxt--DUtjG3mG">
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md-mobile text-on-surface">Alex Rivera</h3>
+<p class="font-body-md text-on-surface-variant">Charging Technician • Mobile Van #402</p>
+</div>
+</div>
+<div class="flex gap-4 w-full md:w-auto">
+<button class="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-surface-container-highest text-on-surface hover:bg-surface-bright transition-colors">
+<span class="material-symbols-outlined">chat</span>
+                Chat
+            </button>
+<button class="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-primary-container text-on-primary-container hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined">call</span>
+                Call
+            </button>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Bar (Shared Component) -->
+<nav class="fixed bottom-0 w-full z-50 bg-surface/90 dark:bg-surface-container-lowest/90 backdrop-blur-2xl border-t border-white/5 shadow-[0_-8px_24px_rgba(0,0,0,0.4)] rounded-t-xl">
+<div class="flex justify-around items-center h-20 pb-safe px-4">
+<a class="flex flex-col items-center justify-center text-tertiary hover:text-primary transition-colors active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-sm text-label-sm">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary-fixed-dim drop-shadow-[0_0_8px_rgba(42,229,0,0.4)] transition-all duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">bolt</span>
+<span class="font-label-sm text-label-sm">Book</span>
+</a>
+<a class="flex flex-col items-center justify-center text-tertiary hover:text-primary transition-colors active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined">map</span>
+<span class="font-label-sm text-label-sm">Map</span>
+</a>
+<a class="flex flex-col items-center justify-center text-tertiary hover:text-primary transition-colors active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-sm text-label-sm">Profile</span>
+</a>
+</div>
+</nav>
+<script>
+    // Custom Element for Three.js Scenes
+    class ThreeJSScene extends HTMLElement {
+        connectedCallback() {
+            const scriptContent = this.getAttribute('src');
+            if (!scriptContent) return;
+
+            const container = this;
+            try {
+                // Execute the animation script provided in the placeholder
+                // The script expects a 'container' variable to be available
+                const executeAnimation = new Function('container', 'THREE', scriptContent);
+                executeAnimation(container, THREE);
+            } catch (e) {
+                console.error("Error executing ThreeJS animation:", e);
+            }
+        }
+    }
+    customElements.define('threejs-scene', ThreeJSScene);
+
+    // Add a slow "breathing" energy effect to the center percentage
+    const centerText = document.querySelector('.font-display-lg-mobile');
+    if (centerText) {
+        centerText.classList.add('transition-all', 'duration-1000');
+        setInterval(() => {
+            centerText.style.textShadow = '0 0 20px rgba(42, 229, 0, 0.4)';
+            setTimeout(() => {
+                centerText.style.textShadow = '0 0 5px rgba(42, 229, 0, 0.1)';
+            }, 1000);
+        }, 2000);
+    }
+</script>
+</body></html>

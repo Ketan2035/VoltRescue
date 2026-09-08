@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Geist:wght@400;500;600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(25, 25, 25, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .success-glow {
+            filter: drop-shadow(0 0 20px rgba(42, 229, 0, 0.3));
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(1.2); opacity: 0; }
+        }
+        .pulse-animation {
+            animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error-container": "#ffdad6",
+                        "secondary": "#d7ffc5",
+                        "inverse-surface": "#e5e2e1",
+                        "error-container": "#93000a",
+                        "error": "#ffb4ab",
+                        "on-secondary": "#053900",
+                        "inverse-on-surface": "#313030",
+                        "primary": "#adc6ff",
+                        "on-primary": "#002e69",
+                        "on-surface": "#e5e2e1",
+                        "surface-bright": "#393939",
+                        "primary-container": "#4b8eff",
+                        "tertiary-container": "#909191",
+                        "on-tertiary": "#2f3131",
+                        "on-error": "#690005",
+                        "secondary-fixed-dim": "#2ae500",
+                        "outline": "#8b90a0",
+                        "on-primary-container": "#00285c",
+                        "surface-container-lowest": "#0e0e0e",
+                        "tertiary": "#c6c6c7",
+                        "primary-fixed": "#d8e2ff",
+                        "background": "#131313",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "surface-container-low": "#1c1b1b",
+                        "surface-container-high": "#2a2a2a",
+                        "on-primary-fixed-variant": "#004493",
+                        "surface": "#131313",
+                        "on-primary-fixed": "#001a41",
+                        "surface-tint": "#adc6ff",
+                        "surface-variant": "#353534",
+                        "surface-container-highest": "#353534",
+                        "tertiary-fixed": "#e2e2e2",
+                        "secondary-container": "#2ff801",
+                        "on-background": "#e5e2e1",
+                        "surface-container": "#201f1f",
+                        "on-secondary-fixed-variant": "#095300",
+                        "inverse-primary": "#005bc1",
+                        "primary-fixed-dim": "#adc6ff",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "on-tertiary-container": "#282a2a",
+                        "on-secondary-fixed": "#022100",
+                        "on-secondary-container": "#0f6d00",
+                        "surface-dim": "#131313",
+                        "outline-variant": "#414755",
+                        "on-surface-variant": "#c1c6d7",
+                        "secondary-fixed": "#79ff5b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-mobile": "20px",
+                        "container-max": "1280px",
+                        "unit": "4px",
+                        "margin-desktop": "40px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Geist"],
+                        "headline-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "display-lg-mobile": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "letterSpacing": "0", "fontWeight": "400"}],
+                        "display-lg-mobile": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "letterSpacing": "0", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface selection:bg-primary/30 min-h-screen">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-surface-dim/80 backdrop-blur-xl border-b border-white/10 shadow-sm flex items-center justify-between px-margin-mobile py-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">battery_charging_full</span>
+<h1 class="font-headline-md text-headline-md-mobile text-on-surface">Charging Summary</h1>
+</div>
+<div class="w-10 h-10 rounded-full border border-primary/20 overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional high-resolution close-up portrait of a young tech executive with soft cinematic lighting, against a dark bokeh background of city lights. The aesthetic is clean, premium, and sophisticated, matching a high-end EV application user profile." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJ2Ipr8k9nj1IAW31e-FLpTk3t_dYqN5Xymci7hjTPpZyst43cfxWEyc4mUAfXhlRmxXPU1k5AOTa-FvocvE7LvBRXIkbta4mHCkCXfp-k3gqaO0yUePvo9_wZiidaYog5SHL7Kron-XQfkrfjOAPnFyW5Keau4ojd8lyw_3vfr6YE0ZlwLyP8tzHpBD3kQTWFkgMLMxoBV5cfWUUlB4rPJg651PkRbB8A4j-SY8QwAsFTA2q9LSssCgPJ05soMjxQfUdXGUNIv_nD"/>
+</div>
+</header>
+<main class="pt-24 pb-32 px-margin-mobile max-w-lg mx-auto space-y-8">
+<!-- Success State Illustration -->
+<section class="flex flex-col items-center justify-center py-6 text-center space-y-4">
+<div class="relative flex items-center justify-center">
+<div class="absolute w-24 h-24 bg-secondary-fixed-dim/20 rounded-full pulse-animation"></div>
+<div class="w-20 h-20 rounded-full bg-secondary-container flex items-center justify-center success-glow">
+<span class="material-symbols-outlined text-on-secondary-container text-4xl font-bold">check</span>
+</div>
+</div>
+<div>
+<h2 class="font-display-lg-mobile text-display-lg-mobile text-on-surface tracking-tight">Charging Complete</h2>
+<p class="font-body-md text-on-surface-variant">Your vehicle is ready for the road.</p>
+</div>
+</section>
+<!-- Summary Statistics Grid -->
+<section class="grid grid-cols-1 gap-4">
+<div class="glass-card rounded-xl p-6 flex items-center justify-between">
+<div class="space-y-1">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Energy Delivered</p>
+<p class="font-headline-md text-headline-md-mobile text-primary">45.2 <span class="text-body-md text-on-surface-variant font-normal">kWh</span></p>
+</div>
+<span class="material-symbols-outlined text-primary/40 text-4xl">bolt</span>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="glass-card rounded-xl p-6 space-y-1">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Range Added</p>
+<p class="font-headline-md text-headline-md-mobile text-secondary-fixed-dim">+185 <span class="text-body-md text-on-surface-variant font-normal">mi</span></p>
+</div>
+<div class="glass-card rounded-xl p-6 space-y-1">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Time Elapsed</p>
+<p class="font-headline-md text-headline-md-mobile text-on-surface">32 <span class="text-body-md text-on-surface-variant font-normal">mins</span></p>
+</div>
+</div>
+</section>
+<!-- Cost Breakdown -->
+<section class="space-y-4">
+<h3 class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest px-1">Price Details</h3>
+<div class="glass-card rounded-xl p-6 space-y-4">
+<div class="flex justify-between items-center font-body-md text-on-surface-variant">
+<span>Charging Fee</span>
+<span class="text-on-surface">$15.82</span>
+</div>
+<div class="flex justify-between items-center font-body-md text-on-surface-variant">
+<span>Service Fee</span>
+<span class="text-on-surface">$2.50</span>
+</div>
+<div class="pt-4 border-t border-white/5 flex justify-between items-end">
+<span class="font-body-lg text-body-lg text-on-surface">Total Amount</span>
+<span class="font-display-lg-mobile text-display-lg-mobile text-secondary-fixed-dim font-extrabold tracking-tighter">$18.32</span>
+</div>
+</div>
+</section>
+<!-- Payment Method Selection -->
+<section class="space-y-4">
+<h3 class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest px-1">Payment Method</h3>
+<div class="space-y-3">
+<!-- Payment Option 1: Apple Pay -->
+<label class="payment-option cursor-pointer group">
+<input checked="" class="hidden" name="payment" type="radio"/>
+<div class="glass-card rounded-xl p-4 flex items-center justify-between border-primary/40 bg-primary/5 transition-all group-has-[:checked]:border-secondary-fixed-dim group-has-[:checked]:bg-secondary-fixed-dim/5">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-white">apps</span>
+</div>
+<div>
+<p class="font-body-md text-on-surface font-semibold">Apple Pay</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Default method</p>
+</div>
+</div>
+<div class="w-6 h-6 rounded-full border-2 border-outline flex items-center justify-center group-has-[:checked]:border-secondary-fixed-dim group-has-[:checked]:bg-secondary-fixed-dim">
+<div class="w-2.5 h-2.5 rounded-full bg-on-secondary group-has-[:checked]:block hidden"></div>
+</div>
+</div>
+</label>
+<!-- Payment Option 2: Visa -->
+<label class="payment-option cursor-pointer group">
+<input class="hidden" name="payment" type="radio"/>
+<div class="glass-card rounded-xl p-4 flex items-center justify-between border-white/10 transition-all group-has-[:checked]:border-secondary-fixed-dim group-has-[:checked]:bg-secondary-fixed-dim/5">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-white">credit_card</span>
+</div>
+<div>
+<p class="font-body-md text-on-surface font-semibold">Visa ending in 4242</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Exp 12/26</p>
+</div>
+</div>
+<div class="w-6 h-6 rounded-full border-2 border-outline flex items-center justify-center group-has-[:checked]:border-secondary-fixed-dim group-has-[:checked]:bg-secondary-fixed-dim">
+<div class="w-2.5 h-2.5 rounded-full bg-on-secondary group-has-[:checked]:block hidden"></div>
+</div>
+</div>
+</label>
+</div>
+</section>
+<!-- Actions -->
+<section class="space-y-6 pt-4 pb-12 text-center">
+<button class="w-full bg-secondary-container text-on-secondary-container font-headline-md text-headline-md-mobile py-5 rounded-2xl shadow-[0_8px_32px_rgba(42,229,0,0.2)] active:scale-[0.98] transition-all duration-200 hover:brightness-110">
+                Pay $18.32
+            </button>
+<button class="flex items-center justify-center gap-2 mx-auto text-primary hover:text-primary-container transition-colors font-body-md">
+<span class="material-symbols-outlined">download</span>
+                Download Receipt
+            </button>
+</section>
+</main>
+<!-- Bottom Navigation Shell (Suppressed for focused Transactional screen as per mandate, but included BottomNavBar structure if required by some flows. Here we suppress to prioritize payment focus.) -->
+<script>
+        // Simple micro-interaction for payment selection
+        document.querySelectorAll('.payment-option').forEach(option => {
+            option.addEventListener('click', () => {
+                document.querySelectorAll('.payment-option div').forEach(div => {
+                    div.classList.remove('border-secondary-fixed-dim', 'bg-secondary-fixed-dim/5');
+                    div.classList.add('border-white/10');
+                });
+                const container = option.querySelector('div');
+                container.classList.add('border-secondary-fixed-dim', 'bg-secondary-fixed-dim/5');
+                container.classList.remove('border-white/10');
+            });
+        });
+
+        // Click effect for payment button
+        const payBtn = document.querySelector('button.bg-secondary-container');
+        payBtn.addEventListener('click', function() {
+            this.innerHTML = '<span class="material-symbols-outlined animate-spin">progress_activity</span> Processing...';
+            setTimeout(() => {
+                this.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Payment Successful';
+                this.classList.replace('bg-secondary-container', 'bg-secondary-fixed-dim');
+            }, 1500);
+        });
+    </script>
+</body></html>

@@ -1,0 +1,264 @@
+<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Volt Drive | Operator Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Geist:wght@400;500;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Inter:wght@100..900&amp;display=swap" rel="stylesheet">
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(28, 27, 27, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .pulse-glow {
+            box-shadow: 0 0 15px rgba(121, 255, 91, 0.3);
+            animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.02); }
+        }
+        .map-overlay {
+            background: radial-gradient(circle at center, transparent 0%, rgba(19, 19, 19, 0.4) 100%);
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-highest": "#353534",
+                    "surface-variant": "#353534",
+                    "on-primary-fixed": "#001a41",
+                    "inverse-surface": "#e5e2e1",
+                    "on-tertiary": "#2f3131",
+                    "on-primary-fixed-variant": "#004493",
+                    "background": "#131313",
+                    "surface-dim": "#131313",
+                    "surface-tint": "#adc6ff",
+                    "inverse-on-surface": "#313030",
+                    "tertiary": "#c6c6c7",
+                    "surface": "#131313",
+                    "on-tertiary-fixed-variant": "#454747",
+                    "surface-container-lowest": "#0e0e0e",
+                    "on-error": "#690005",
+                    "on-tertiary-fixed": "#1a1c1c",
+                    "primary-container": "#4b8eff",
+                    "outline-variant": "#414755",
+                    "tertiary-container": "#909191",
+                    "surface-container-high": "#2a2a2a",
+                    "secondary-fixed": "#79ff5b",
+                    "secondary": "#d7ffc5",
+                    "on-secondary-container": "#0f6d00",
+                    "primary": "#adc6ff",
+                    "on-surface": "#e5e2e1",
+                    "on-secondary-fixed": "#022100",
+                    "primary-fixed": "#d8e2ff",
+                    "tertiary-fixed": "#e2e2e2",
+                    "on-tertiary-container": "#282a2a",
+                    "on-primary": "#002e69",
+                    "secondary-container": "#2ff801",
+                    "on-background": "#e5e2e1",
+                    "surface-container": "#201f1f",
+                    "surface-bright": "#393939",
+                    "secondary-fixed-dim": "#2ae500",
+                    "on-surface-variant": "#c1c6d7",
+                    "tertiary-fixed-dim": "#c6c6c7",
+                    "on-secondary-fixed-variant": "#095300",
+                    "on-secondary": "#053900",
+                    "surface-container-low": "#1c1b1b",
+                    "primary-fixed-dim": "#adc6ff",
+                    "outline": "#8b90a0",
+                    "error-container": "#93000a",
+                    "on-primary-container": "#00285c",
+                    "inverse-primary": "#005bc1",
+                    "on-error-container": "#ffdad6",
+                    "error": "#ffb4ab"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-mobile": "20px",
+                    "container-max": "1280px",
+                    "margin-desktop": "40px",
+                    "gutter": "16px",
+                    "unit": "4px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "label-sm": ["Geist"],
+                    "display-lg-mobile": ["Inter"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                    "display-lg-mobile": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "letterSpacing": "0", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "letterSpacing": "0", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body-md min-h-screen overflow-hidden">
+<!-- Header / TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-surface/80 backdrop-blur-xl border-b border-white/10 shadow-sm">
+<div class="flex justify-between items-center px-margin-mobile h-16 w-full max-w-container-max mx-auto">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary cursor-pointer hover:opacity-80 transition-opacity" data-icon="menu">menu</span>
+<h1 class="font-headline-md text-headline-md-mobile font-bold tracking-tighter text-primary">VOLT DRIVE</h1>
+</div>
+<div class="flex items-center gap-4">
+<!-- Status Toggle -->
+<div class="flex items-center bg-surface-container-low rounded-full px-3 py-1.5 cursor-pointer border border-white/5 transition-all duration-300" id="status-toggle" onclick="toggleStatus()">
+<div class="w-2.5 h-2.5 rounded-full bg-secondary-fixed mr-2 pulse-glow" id="status-indicator"></div>
+<span class="font-label-sm text-label-sm text-on-surface uppercase tracking-wider" id="status-text">Online</span>
+</div>
+<div class="w-10 h-10 rounded-full border-2 border-primary/20 overflow-hidden bg-surface-variant hover:opacity-80 transition-opacity cursor-pointer">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a high-end service operator in a sleek charcoal uniform. The background is a blurred futuristic command center with neon blue and green data displays. Lighting is moody and cinematic, emphasizing a professional and reliable persona within a premium electric vehicle charging ecosystem." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJnCy8yJPP_MegNjLuPPeu00D89ulbhk8HTHv9EEkgJau_VltUxPtTtHH9Qw-2gIXdyvdOjAiIFV2LqvJvBOouintaiUoND6TOKalf0M04Irbsuog3G0bdXqPLX6YtBfAB3mEMSlkydYH-NvT64_hkkehCTbmZlzMRdn6UXwoR47ZQyTzTeKWRwK1UDXQbWcy2eY7kF0LEjkUWENiJNuGfwl9kqYUM_1MScxU8LfB0vr5VEax1RwkqTpmnilcTBwgxOvygk8_Wrvsz">
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Area (Map Background) -->
+<main class="relative w-full h-screen">
+<!-- Map Background -->
+<div class="absolute inset-0 z-0">
+<div class="w-full h-full bg-cover bg-center grayscale opacity-60" data-alt="A sophisticated dark-themed digital map of a modern metropolitan area at night. The streets are illuminated with thin, glowing lines of electric blue and neon green, representing energy flow and high-performance routing. The visual style is minimalist and data-rich, characteristic of a premium electric vehicle's navigation system." data-location="San Francisco" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBxSzK-KaNx2a1geFsQeZ4gzo3jJlOGJKQqeBdiJbDP_8kWRk4oHEsFkTCrYUgF5iBpxStpjBimF_2kd0dcUU_r_6c7tmfY7uU_ao-8ikqQjJZU91zYFwbbiKU0rU8F6v1g77w08fX6kOXFf-Q2NrCm1aoI1b16_FSEH84XeYuNL5fRaLuFCbWb4VegZYNNNeMj7oxGjzvdqpstvOL9XnkUHIqZf97xPTuEZvsFqOENB-M9dsRAZ7twE5z-ydIdYO7K2A-_jDolKAsj')"></div>
+<div class="absolute inset-0 map-overlay"></div>
+</div>
+<!-- Incoming Request Overlay -->
+<div class="absolute inset-0 z-10 flex items-center justify-center px-margin-mobile">
+<div class="glass-card w-full max-w-md rounded-[32px] p-8 shadow-[0_32px_64px_rgba(0,0,0,0.6)] border border-white/20 transform scale-100 transition-all duration-500" id="request-card">
+<!-- New Request Header -->
+<div class="flex justify-between items-start mb-8">
+<div>
+<span class="inline-block px-3 py-1 rounded-full bg-secondary-fixed/20 text-secondary-fixed font-label-sm text-label-sm uppercase tracking-widest mb-2 border border-secondary-fixed/30">New Incoming Request</span>
+<h2 class="font-headline-md text-headline-md-mobile text-on-surface">Charging Match</h2>
+</div>
+<div class="bg-surface-container-high p-3 rounded-2xl">
+<span class="material-symbols-outlined text-secondary-fixed text-3xl" data-icon="electric_bolt" style="font-variation-settings: 'FILL' 1;">electric_bolt</span>
+</div>
+</div>
+<!-- Customer & Vehicle Bento Section -->
+<div class="grid grid-cols-2 gap-4 mb-8">
+<div class="bg-white/5 rounded-2xl p-4 border border-white/5">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-1">Customer</p>
+<p class="font-headline-md text-lg text-on-surface">Sarah K.</p>
+</div>
+<div class="bg-white/5 rounded-2xl p-4 border border-white/5">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-1">Vehicle</p>
+<p class="font-headline-md text-lg text-on-surface">Tesla Model Y</p>
+</div>
+<div class="bg-white/5 rounded-2xl p-4 border border-white/5">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-1">Distance</p>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="near_me">near_me</span>
+<p class="font-headline-md text-lg text-on-surface">1.2 miles</p>
+</div>
+</div>
+<div class="bg-white/5 rounded-2xl p-4 border border-white/5">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-1">Est. Payout</p>
+<p class="font-headline-md text-lg text-secondary-fixed">$42.50</p>
+</div>
+</div>
+<!-- Progress/Visual pulse for the timer -->
+<div class="w-full h-1 bg-white/10 rounded-full mb-8 overflow-hidden">
+<div class="h-full bg-secondary-fixed w-full" id="request-timer" style="width: 88.3%;"></div>
+</div>
+<!-- Actions -->
+<div class="flex flex-col gap-4"><button class="w-full py-4 rounded-2xl bg-white/5 border border-white/10 text-on-surface font-label-sm text-lg font-medium hover:bg-white/10 transition-all active:scale-95 duration-150 flex items-center justify-center gap-2">
+    <span class="material-symbols-outlined text-primary text-xl">info</span>
+    View Details
+</button>
+<button class="w-full py-5 rounded-2xl bg-secondary-fixed text-on-secondary-fixed font-headline-md text-xl font-bold active:scale-95 transition-all duration-150 shadow-[0_8px_32px_rgba(121,255,91,0.2)] hover:opacity-90">
+                        Accept Request
+                    </button>
+<button class="w-full py-4 rounded-2xl bg-white/5 border border-white/10 text-on-surface-variant font-label-sm text-lg font-medium hover:bg-white/10 transition-all active:scale-95 duration-150">
+                        Decline
+                    </button>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-3 bg-surface-container/90 dark:bg-surface-container/90 backdrop-blur-2xl border-t border-white/5 shadow-[0_-8px_24px_rgba(0,0,0,0.4)] rounded-t-xl">
+<a class="flex flex-col items-center justify-center text-secondary-fixed bg-secondary-fixed/10 rounded-xl px-4 py-1 shadow-[0_0_12px_rgba(121,255,91,0.2)] active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="electric_bolt" style="font-variation-settings: 'FILL' 1;">electric_bolt</span>
+<span class="font-label-sm text-label-sm">Requests</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-secondary-fixed/80 active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="ev_charger">ev_charger</span>
+<span class="font-label-sm text-label-sm">Active</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-secondary-fixed/80 active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="font-label-sm text-label-sm">History</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-secondary-fixed/80 active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-label-sm text-label-sm">Account</span>
+</a>
+</nav>
+<script>
+        let isOnline = true;
+        const statusToggle = document.getElementById('status-toggle');
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
+        const timerBar = document.getElementById('request-timer');
+        const requestCard = document.getElementById('request-card');
+
+        function toggleStatus() {
+            isOnline = !isOnline;
+            if (isOnline) {
+                statusIndicator.classList.remove('bg-on-surface-variant');
+                statusIndicator.classList.add('bg-secondary-fixed', 'pulse-glow');
+                statusText.innerText = 'Online';
+                statusToggle.classList.remove('opacity-60');
+                requestCard.style.opacity = '1';
+                requestCard.style.transform = 'scale(1)';
+            } else {
+                statusIndicator.classList.remove('bg-secondary-fixed', 'pulse-glow');
+                statusIndicator.classList.add('bg-on-surface-variant');
+                statusText.innerText = 'Offline';
+                statusToggle.classList.add('opacity-60');
+                requestCard.style.opacity = '0.2';
+                requestCard.style.transform = 'scale(0.95)';
+            }
+        }
+
+        // Simple timer animation for the request
+        let width = 100;
+        setInterval(() => {
+            if (isOnline && width > 0) {
+                width -= 0.1;
+                timerBar.style.width = width + '%';
+            } else if (width <= 0) {
+                // Mock: Reset for demo purposes
+                width = 100;
+            }
+        }, 30);
+    </script>
+
+
+</body></html>

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
+    <title>VoltRescue - Start Session</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Geist:wght@400;500;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Inter:wght@100..900&display=swap"
+        rel="stylesheet" />
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        .glass-card {
+            background: rgba(32, 31, 31, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        @keyframes pulse-neon {
+            0% {
+                box-shadow: 0 0 0 0 rgba(47, 248, 1, 0.4);
+                transform: scale(1);
+            }
+
+            70% {
+                box-shadow: 0 0 0 20px rgba(47, 248, 1, 0);
+                transform: scale(1.02);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(47, 248, 1, 0);
+                transform: scale(1);
+            }
+        }
+
+        .neon-pulse {
+            animation: pulse-neon 2s infinite;
+        }
+
+        .electricity-flow {
+            background: linear-gradient(90deg, transparent, rgba(47, 248, 1, 0.2), transparent);
+            background-size: 200% 100%;
+            animation: flow 3s linear infinite;
+        }
+
+        @keyframes flow {
+            from {
+                background-position: 200% 0;
+            }
+
+            to {
+                background-position: -200% 0;
+            }
+        }
+    </style>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-container": "#909191",
+                        "error": "#ffb4ab",
+                        "surface-dim": "#131313",
+                        "on-error": "#690005",
+                        "surface-container-low": "#1c1b1b",
+                        "primary-container": "#4b8eff",
+                        "on-surface-variant": "#c1c6d7",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "tertiary": "#c6c6c7",
+                        "on-primary-fixed": "#001a41",
+                        "on-primary-container": "#00285c",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-surface": "#e5e2e1",
+                        "inverse-surface": "#e5e2e1",
+                        "outline-variant": "#414755",
+                        "surface": "#131313",
+                        "surface-bright": "#393939",
+                        "secondary": "#d7ffc5",
+                        "on-background": "#e5e2e1",
+                        "on-secondary": "#053900",
+                        "error-container": "#93000a",
+                        "on-primary": "#002e69",
+                        "on-secondary-fixed-variant": "#095300",
+                        "background": "#131313",
+                        "tertiary-fixed": "#e2e2e2",
+                        "inverse-on-surface": "#313030",
+                        "surface-container-high": "#2a2a2a",
+                        "inverse-primary": "#005bc1",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "on-tertiary": "#2f3131",
+                        "on-error-container": "#ffdad6",
+                        "surface-container-highest": "#353534",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "surface-variant": "#353534",
+                        "surface-container": "#201f1f",
+                        "primary-fixed-dim": "#adc6ff",
+                        "on-tertiary-container": "#282a2a",
+                        "on-secondary-fixed": "#022100",
+                        "surface-tint": "#adc6ff",
+                        "outline": "#8b90a0",
+                        "primary-fixed": "#d8e2ff",
+                        "secondary-fixed": "#79ff5b",
+                        "on-secondary-container": "#0f6d00",
+                        "primary": "#adc6ff",
+                        "secondary-fixed-dim": "#2ae500",
+                        "secondary-container": "#2ff801",
+                        "on-primary-fixed-variant": "#004493"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-mobile": "20px",
+                        "container-max": "1280px",
+                        "unit": "4px",
+                        "gutter": "16px",
+                        "margin-desktop": "40px"
+                    },
+                    "fontFamily": {
+                        "display-lg-mobile": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "label-sm": ["Geist"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display-lg-mobile": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "letterSpacing": "0", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "letterSpacing": "0", "fontWeight": "400" }]
+                    }
+                },
+            },
+        }
+    </script>
+    <style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+</head>
+
+<body class="bg-background text-on-surface min-h-screen font-body-md overflow-x-hidden">
+    <!-- Top App Bar -->
+    <header
+        class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-surface-dim/80 backdrop-blur-xl border-b border-white/10 shadow-sm flex justify-between items-center px-margin-mobile h-16">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/20">
+                <img class="w-full h-full object-cover"
+                    data-alt="A professional portrait of a male EV charging technician wearing a sleek black and blue high-performance uniform. He has a friendly expression, short groomed hair, and is positioned against a clean, modern garage setting with soft ambient blue lighting that matches the VoltRescue brand aesthetic."
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuBUhUHdkVi4TXl0RqamXISKJHyUqX13-G_auFfIcFf-gOyzlDKv2lprGPkrKF75lyV2ORH9OlRd5cckkCyvukYcPo1ywAQXCQ_yYf3_XJ0frbhGhW_kYFK0G7m3s0BY9okUJ5ESl99SHsPo4p1XiT76eb4his6yix-1APFjjxyfQUhY6uoMe5BcO3LUXPpN4wS_o8y_tjXum-6ECsqhb6QjgVU9Y4LESyBs6T_U0DeCtdGgQWW6aBsM8xR2b2zCi8hkKi0gntPclGI5" />
+            </div>
+            <div class="flex flex-col">
+                <span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Active
+                    Request</span>
+                <span class="font-headline-md text-headline-md-mobile text-primary">Sarah K.</span>
+            </div>
+        </div>
+        <button
+            class="material-symbols-outlined text-primary hover:opacity-80 active:scale-95 transition-all">notifications</button>
+    </header>
+    <main class="pt-24 pb-32 px-margin-mobile flex flex-col gap-6 max-w-md mx-auto">
+        <!-- Status Card -->
+        <div class="glass-card rounded-xl p-6 relative overflow-hidden">
+            <div class="electricity-flow absolute inset-0 opacity-10 pointer-events-none"></div>
+            <div class="flex items-start justify-between">
+                <div>
+                    <h2 class="font-headline-md text-headline-md-mobile text-secondary-container">Arrived at Location
+                    </h2>
+                    <p class="text-on-surface-variant mt-1">Ready to initiate high-speed charging.</p>
+                </div>
+                <div class="bg-secondary-container/10 p-2 rounded-lg">
+                    <span class="material-symbols-outlined text-secondary-container"
+                        style="font-variation-settings: 'FILL' 1;">location_on</span>
+                </div>
+            </div>
+            <div class="mt-4 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-secondary-container animate-pulse"></span>
+                <span class="text-label-sm font-label-sm text-secondary-container tracking-wider uppercase">System
+                    Calibrated</span>
+            </div>
+        </div>
+        <!-- Vehicle Verification Section -->
+        <div class="glass-card rounded-xl overflow-hidden">
+            <div class="h-48 relative">
+                <img class="w-full h-full object-cover"
+                    data-alt="A sleek white Tesla Model Y parked in a futuristic, dark urban parking structure. The scene is illuminated by dramatic overhead cool-white LED lights and subtle neon green ambient floor strips. The vehicle's aerodynamic lines are highlighted, emphasizing its premium build. The lighting creates high-contrast shadows against the dark obsidian floor, reflecting the VoltRescue luxury cockpit feel."
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuB8jxnutIg8JnoCO2Ec1HRSJ4Qbs2za4ewSx6JDTGkt6lk990jShV-ze20w2d7_vKKeTXBhsTyFpGFsqSfcz3XaOkJX8d3Trxw62zHpYVME7w9ZE8P6c88ZeXLji6bikLBUas7WuJ2DUnUDs_jFYtJDO6_1DF1_U9Nl4y2w22MKg1dtC5mkcDjtbcqr5XCuO9Hp4ueoucb3wACyhh4IFm9b--hyAzWtwW1hc2luexXu_tpm8QTU4nPMficYema7JzJ_sQ4y2ONmERxN" />
+                <div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest to-transparent"></div>
+                <div class="absolute bottom-4 left-6">
+                    <span
+                        class="bg-primary/20 backdrop-blur-md px-3 py-1 rounded-full text-primary font-label-sm text-label-sm border border-primary/30 uppercase tracking-tighter">Verified
+                        Plate</span>
+                    <h3 class="font-headline-md text-headline-md-mobile mt-1">Tesla Model Y</h3>
+                </div>
+            </div>
+            <div class="p-6 flex justify-between items-center bg-surface-container/40">
+                <div class="flex flex-col">
+                    <span class="text-on-surface-variant text-label-sm font-label-sm">LICENSE PLATE</span>
+                    <span class="font-display-lg-mobile text-[24px] tracking-widest text-primary">EV-982-SK</span>
+                </div>
+                <div class="flex flex-col items-end">
+                    <span class="text-on-surface-variant text-label-sm font-label-sm text-right">BATTERY</span>
+                    <span class="font-display-lg-mobile text-[24px] text-error">12%</span>
+                </div>
+            </div>
+        </div>
+        <!-- Central Action Area -->
+        <div class="flex flex-col items-center justify-center py-8 gap-10">
+            <!-- Pulsing Start Button -->
+            <button
+                class="group relative w-48 h-48 rounded-full flex flex-col items-center justify-center bg-secondary-container neon-pulse transition-transform active:scale-90 overflow-hidden">
+                <div
+                    class="absolute inset-0 bg-[radial-gradient(circle,rgba(255,255,255,0.4)_0%,transparent_70%)] opacity-20">
+                </div>
+                <span class="material-symbols-outlined text-on-secondary-container text-5xl mb-2"
+                    style="font-variation-settings: 'FILL' 1;">electric_bolt</span>
+                <span class="font-headline-md text-on-secondary-container leading-none">START</span>
+                <span class="font-label-sm text-on-secondary-container/80 tracking-widest mt-1">SESSION</span>
+            </button>
+            <!-- Safety Checklist -->
+            <div class="w-full space-y-3">
+                <div class="flex items-center gap-4 glass-card p-4 rounded-xl border-l-4 border-secondary-container">
+                    <div class="bg-secondary-container/20 p-2 rounded-full">
+                        <span class="material-symbols-outlined text-secondary-container text-[20px]">link</span>
+                    </div>
+                    <div>
+                        <p class="font-body-md text-on-surface">Secure cable connection</p>
+                        <p class="text-label-sm font-label-sm text-on-surface-variant">Ensure CCS2 plug is fully engaged
+                        </p>
+                    </div>
+                    <span class="ml-auto material-symbols-outlined text-secondary-container">check_circle</span>
+                </div>
+                <div class="flex items-center gap-4 glass-card p-4 rounded-xl border-l-4 border-primary/40">
+                    <div class="bg-primary/20 p-2 rounded-full">
+                        <span class="material-symbols-outlined text-primary text-[20px]">verified_user</span>
+                    </div>
+                    <div>
+                        <p class="font-body-md text-on-surface">Safety perimeter clear</p>
+                        <p class="text-label-sm font-label-sm text-on-surface-variant">No obstructions within 2 meters
+                        </p>
+                    </div>
+                    <span class="ml-auto material-symbols-outlined text-primary">radio_button_unchecked</span>
+                </div>
+            </div>
+        </div>
+    </main>
+    <!-- Bottom Navigation Bar -->
+    <nav
+        class="fixed bottom-0 w-full z-50 bg-surface/90 dark:bg-surface-container-lowest/90 backdrop-blur-2xl border-t border-white/5 shadow-[0_-8px_24px_rgba(0,0,0,0.4)] rounded-t-xl flex justify-around items-center h-20 px-4 pb-safe">
+        <a class="flex flex-col items-center justify-center text-secondary-container dark:text-secondary-fixed bg-secondary-container/10 rounded-xl px-3 py-1 active:scale-90 transition-all duration-200"
+            href="#">
+            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">electric_bolt</span>
+            <span class="font-label-sm text-label-sm mt-1">Requests</span>
+        </a>
+        <a class="flex flex-col items-center justify-center text-tertiary dark:text-tertiary-fixed-dim opacity-60 hover:text-secondary dark:hover:text-secondary-fixed active:scale-90 transition-all duration-200"
+            href="#">
+            <span class="material-symbols-outlined">sync_lock</span>
+            <span class="font-label-sm text-label-sm mt-1">Sessions</span>
+        </a>
+        <a class="flex flex-col items-center justify-center text-tertiary dark:text-tertiary-fixed-dim opacity-60 hover:text-secondary dark:hover:text-secondary-fixed active:scale-90 transition-all duration-200"
+            href="#">
+            <span class="material-symbols-outlined">history</span>
+            <span class="font-label-sm text-label-sm mt-1">History</span>
+        </a>
+        <a class="flex flex-col items-center justify-center text-tertiary dark:text-tertiary-fixed-dim opacity-60 hover:text-secondary dark:hover:text-secondary-fixed active:scale-90 transition-all duration-200"
+            href="#">
+            <span class="material-symbols-outlined">person</span>
+            <span class="font-label-sm text-label-sm mt-1">Account</span>
+        </a>
+    </nav>
+    <script>
+        // Micro-interactions for checklist
+        document.querySelectorAll('.glass-card.p-4').forEach(item => {
+            item.addEventListener('click', function () {
+                const icon = this.querySelector('.ml-auto');
+                if (icon.innerText === 'radio_button_unchecked') {
+                    icon.innerText = 'check_circle';
+                    icon.classList.remove('text-primary');
+                    icon.classList.add('text-secondary-container');
+                    this.classList.replace('border-primary/40', 'border-secondary-container');
+                } else {
+                    icon.innerText = 'radio_button_unchecked';
+                    icon.classList.add('text-primary');
+                    icon.classList.remove('text-secondary-container');
+                    this.classList.replace('border-secondary-container', 'border-primary/40');
+                }
+            });
+        });
+
+        // Start session button feedback
+        const startBtn = document.querySelector('.neon-pulse');
+        startBtn.addEventListener('click', () => {
+            startBtn.innerHTML = `
+                <span class="material-symbols-outlined text-on-secondary-container text-5xl animate-spin">refresh</span>
+                <span class="font-headline-md text-on-secondary-container leading-none mt-2">LINKING...</span>
+            `;
+            setTimeout(() => {
+                alert('Session initiated. Energy flow starting in 3... 2... 1...');
+                location.reload();
+            }, 2000);
+        });
+    </script>
+</body>
+
+</html>

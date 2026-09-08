@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>VOLT DRIVE | Session Summary</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Geist:wght@400;500;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Inter:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(32, 31, 31, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glow-pulse {
+            box-shadow: 0 0 15px rgba(121, 255, 91, 0.2);
+        }
+        body {
+            background-color: #131313;
+            color: #e5e2e1;
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-highest": "#353534",
+                    "surface-variant": "#353534",
+                    "on-primary-fixed": "#001a41",
+                    "inverse-surface": "#e5e2e1",
+                    "on-tertiary": "#2f3131",
+                    "on-primary-fixed-variant": "#004493",
+                    "background": "#131313",
+                    "surface-dim": "#131313",
+                    "surface-tint": "#adc6ff",
+                    "inverse-on-surface": "#313030",
+                    "tertiary": "#c6c6c7",
+                    "surface": "#131313",
+                    "on-tertiary-fixed-variant": "#454747",
+                    "surface-container-lowest": "#0e0e0e",
+                    "on-error": "#690005",
+                    "on-tertiary-fixed": "#1a1c1c",
+                    "primary-container": "#4b8eff",
+                    "outline-variant": "#414755",
+                    "tertiary-container": "#909191",
+                    "surface-container-high": "#2a2a2a",
+                    "secondary-fixed": "#79ff5b",
+                    "secondary": "#d7ffc5",
+                    "on-secondary-container": "#0f6d00",
+                    "primary": "#adc6ff",
+                    "on-surface": "#e5e2e1",
+                    "on-secondary-fixed": "#022100",
+                    "primary-fixed": "#d8e2ff",
+                    "tertiary-fixed": "#e2e2e2",
+                    "on-tertiary-container": "#282a2a",
+                    "on-primary": "#002e69",
+                    "secondary-container": "#2ff801",
+                    "on-background": "#e5e2e1",
+                    "surface-container": "#201f1f",
+                    "surface-bright": "#393939",
+                    "secondary-fixed-dim": "#2ae500",
+                    "on-surface-variant": "#c1c6d7",
+                    "tertiary-fixed-dim": "#c6c6c7",
+                    "on-secondary-fixed-variant": "#095300",
+                    "on-secondary": "#053900",
+                    "surface-container-low": "#1c1b1b",
+                    "primary-fixed-dim": "#adc6ff",
+                    "outline": "#8b90a0",
+                    "error-container": "#93000a",
+                    "on-primary-container": "#00285c",
+                    "inverse-primary": "#005bc1",
+                    "on-error-container": "#ffdad6",
+                    "error": "#ffb4ab"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-mobile": "20px",
+                    "container-max": "1280px",
+                    "margin-desktop": "40px",
+                    "gutter": "16px",
+                    "unit": "4px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "label-sm": ["Geist"],
+                    "display-lg-mobile": ["Inter"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                    "display-lg-mobile": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "letterSpacing": "0", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "letterSpacing": "0", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="overflow-x-hidden pb-32">
+<!-- Top Navigation -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-surface/80 backdrop-blur-xl border-b border-white/10 shadow-sm">
+<div class="flex justify-between items-center px-margin-mobile h-16 w-full max-w-container-max mx-auto">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary hover:opacity-80 transition-opacity cursor-pointer active:scale-95 duration-150">menu</span>
+<h1 class="font-headline-md text-headline-md-mobile font-bold tracking-tighter text-primary dark:text-primary-fixed-dim">VOLT DRIVE</h1>
+</div>
+<div class="w-10 h-10 rounded-full overflow-hidden border border-white/20 active:scale-95 transition-transform">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of an EV charging operator in a high-tech uniform, with a blurred background of a modern charging hub. The lighting is crisp and blue-toned, emphasizing a futuristic service environment. High contrast, clean and corporate aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD1VBnqOyO4bYsxkLDDJxxrtXc8O0Mm1xWhXG4x_z6jylbDtSDy8Y2M3ryryyLFqHyIVYqzpRGSzP1iCTf5Gny69rC0gxoM2VD8-ooBOYJNaI1g5G4Tx0GT1XCGbhnsJwjR4lW60WMUOinfvioyBmWcXOMn99Cu43NUrM02dRXgIGV5OxPMT7jN_RBqhxn9bXxb4z8WqdK6KgdJ6teAPopYy4OzX40TXeCbvMlpQbM3JPcKVpy9atCNFm_zO6gEBsgTEi0km0uIarTH"/>
+</div>
+</div>
+</header>
+<main class="mt-24 px-margin-mobile max-w-container-max mx-auto space-y-6">
+<!-- Animated Success Background Placeholder -->
+<div class="relative h-48 w-full rounded-xl overflow-hidden glass-card">
+
+<div class="absolute inset-0 flex flex-col justify-center items-center text-center p-6 z-10 bg-black/40">
+<span class="material-symbols-outlined text-secondary-fixed text-5xl mb-2" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<h2 class="font-headline-md text-headline-md-mobile text-on-surface">Charging Session Complete</h2>
+<p class="font-body-md text-on-surface-variant">Session ID: #VD-88921-X</p>
+</div>
+</div>
+<!-- Session Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<!-- Energy Card -->
+<div class="glass-card p-6 rounded-xl flex flex-col justify-between h-40">
+<div class="flex justify-between items-start">
+<span class="font-label-sm text-on-surface-variant uppercase tracking-widest">Energy Delivered</span>
+<span class="material-symbols-outlined text-secondary-fixed">electric_bolt</span>
+</div>
+<div>
+<span class="font-display-lg-mobile md:font-display-lg text-secondary-fixed">48.5</span>
+<span class="font-headline-md text-secondary-fixed/60 ml-1">kWh</span>
+</div>
+</div>
+<!-- Duration Card -->
+<div class="glass-card p-6 rounded-xl flex flex-col justify-between h-40">
+<div class="flex justify-between items-start">
+<span class="font-label-sm text-on-surface-variant uppercase tracking-widest">Session Duration</span>
+<span class="material-symbols-outlined text-primary">schedule</span>
+</div>
+<div>
+<span class="font-display-lg-mobile md:font-display-lg text-on-surface">00:42</span>
+<span class="font-headline-md text-on-surface-variant ml-1">m</span>
+</div>
+</div>
+<!-- Vehicle Info Card -->
+<div class="glass-card p-6 rounded-xl flex flex-col justify-between h-40">
+<div class="flex justify-between items-start">
+<span class="font-label-sm text-on-surface-variant uppercase tracking-widest">Target Vehicle</span>
+<span class="material-symbols-outlined text-on-surface-variant">directions_car</span>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-lg overflow-hidden bg-surface-container-highest">
+<img class="w-full h-full object-cover" data-alt="Close up detail of a sleek metallic silver electric vehicle charging port with glowing blue LED indicator rings. Futuristic automotive photography, low angle, sharp focus, tech-centric visual style with neon green highlights." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC-8-yEEU55l6Obz3ZcdwytH5aBLuvthxWTtpxD1vMh1gPs7YaY89z1r0VhixBaMicyM4iXfj3MpA1pzikKisfrjNXn1wfPtdsuq_wPDHQO-Ghp8o1W67A79kswdx25Lj1MsIR-UlRMWy14x9-sy3JS_-gsfJ8TPtNM51aRktki0Db-cAH-2n-RmxOe7bayjlwg8eXQgUt7GqW-0JDM-X_-2N6UU7dNZ7v2g4sfPSVsw1oAGelhwZhGvD0rjSXBWvSTbw-QHAbD96A6"/>
+</div>
+<div>
+<p class="font-body-md text-on-surface font-semibold">Tesla Model S</p>
+<p class="font-label-sm text-on-surface-variant">License: B-5521-EV</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Detailed Bill Breakdown -->
+<section class="glass-card rounded-xl overflow-hidden">
+<div class="p-6 border-b border-white/5 bg-white/5">
+<h3 class="font-headline-md text-headline-md-mobile text-on-surface">Bill Summary</h3>
+</div>
+<div class="p-6 space-y-4">
+<div class="flex justify-between items-center py-1">
+<span class="font-body-md text-on-surface-variant">Charging Base Rate (48.5 kWh × $0.42)</span>
+<span class="font-body-md text-on-surface font-medium">$20.37</span>
+</div>
+<div class="flex justify-between items-center py-1">
+<span class="font-body-md text-on-surface-variant">On-site Delivery Fee</span>
+<span class="font-body-md text-on-surface font-medium">$12.00</span>
+</div>
+<div class="flex justify-between items-center py-1">
+<span class="font-body-md text-on-surface-variant">Service Surcharge (Peak Hours)</span>
+<span class="font-body-md text-on-surface font-medium">$3.50</span>
+</div>
+<div class="pt-4 mt-4 border-t border-white/10">
+<div class="flex justify-between items-center">
+<span class="font-headline-md text-on-surface">Total Bill Amount</span>
+<div class="text-right">
+<span class="font-display-lg-mobile text-secondary-fixed glow-pulse px-3 py-1 bg-secondary-fixed/10 rounded-lg">$35.87</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Driver Earnings Highlight -->
+<div class="mx-6 mb-6 p-4 rounded-xl bg-primary-container/10 border border-primary-container/20 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">payments</span>
+</div>
+<div>
+<p class="font-label-sm text-primary uppercase">Your Estimated Earnings</p>
+<p class="font-headline-md text-on-surface">$24.40</p>
+</div>
+</div>
+<span class="font-label-sm text-primary bg-primary/10 px-2 py-1 rounded">68% Margin</span>
+</div>
+</section>
+<!-- Action Section -->
+<div class="flex flex-col gap-4 py-4">
+<button class="w-full py-4 bg-secondary-fixed text-on-secondary-fixed font-headline-md rounded-xl shadow-[0_0_20px_rgba(121,255,91,0.3)] active:scale-95 transition-all flex items-center justify-center gap-3">
+                Finalize &amp; Send Bill
+                <span class="material-symbols-outlined">send</span>
+</button>
+<button class="w-full py-3 bg-transparent border border-white/10 text-on-surface-variant font-body-md rounded-xl hover:bg-white/5 active:scale-95 transition-all">
+                Review Session Log
+            </button>
+</div>
+</main>
+<!-- Bottom Navigation Shell -->
+<nav class="fixed bottom-0 left-0 w-full z-50 bg-surface-container/90 dark:bg-surface-container/90 backdrop-blur-2xl border-t border-white/5 shadow-[0_-8px_24px_rgba(0,0,0,0.4)] flex justify-around items-center px-4 pb-6 pt-3 rounded-t-xl">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-secondary-fixed/80 transition-all duration-200 active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="electric_bolt">electric_bolt</span>
+<span class="font-label-sm text-label-sm">Requests</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary-fixed bg-secondary-fixed/10 rounded-xl px-4 py-1 shadow-[0_0_12px_rgba(121,255,91,0.2)] active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="ev_charger" style="font-variation-settings: 'FILL' 1;">ev_charger</span>
+<span class="font-label-sm text-label-sm">Active</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-secondary-fixed/80 transition-all duration-200 active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="font-label-sm text-label-sm">History</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-secondary-fixed/80 transition-all duration-200 active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-label-sm text-label-sm">Account</span>
+</a>
+</nav>
+<script>
+        // Micro-interaction for the Send button
+        document.querySelector('button.bg-secondary-fixed').addEventListener('click', function() {
+            const btn = this;
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = '<span class="material-symbols-outlined animate-spin">refresh</span> Processing...';
+            btn.classList.add('opacity-80', 'pointer-events-none');
+            
+            setTimeout(() => {
+                btn.innerHTML = '<span class="material-symbols-outlined">check</span> Bill Sent Successfully';
+                btn.classList.replace('bg-secondary-fixed', 'bg-primary');
+                btn.classList.replace('text-on-secondary-fixed', 'text-on-primary');
+                
+                setTimeout(() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }, 1000);
+            }, 1500);
+        });
+    </script>
+</body></html>
