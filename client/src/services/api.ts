@@ -1,39 +1,19 @@
 import axios from 'axios';
 import storage from './storage';
 
-import { Platform } from 'react-native';
-
-import Constants from 'expo-constants';
-
-// Detect IP dynamically from Expo packager host or fallback to current local Wi-Fi IP
-const getDevMachineIp = () => {
-  const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.debuggerHost || (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
-  // If hostUri is an ngrok or Expo tunnel domain, it only tunnels Metro (port 8081), so fallback to local Wi-Fi IP for the backend API
-  if (hostUri && !hostUri.includes('exp.direct') && !hostUri.includes('ngrok') && !hostUri.includes('expo.dev')) {
-    const candidate = hostUri.split(':')[0];
-    // Ensure candidate looks like an IP address
-    if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(candidate) && candidate !== '127.0.0.1') {
-      return candidate;
-    }
-  }
-  return '10.197.7.106';
-};
-
-const DEV_MACHINE_IP = getDevMachineIp();
-
-export const SERVER_HOST = Platform.OS === 'web' 
-  ? 'http://localhost:5000' 
-  : `http://${DEV_MACHINE_IP}:5000`;
+// Production Render Backend URL
+export const SERVER_HOST = 'https://voltrescue-6mzf.onrender.com';
 
 export const BASE_URL = `${SERVER_HOST}/api/v1`;
 
-console.log('⚡ VoltRescue API Base URL:', BASE_URL);
+console.log('⚡ VoltRescue Live Backend URL:', BASE_URL);
 
 const api = axios.create({
   baseURL: BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 15000,
 });
 
 api.interceptors.request.use(async (config) => {
