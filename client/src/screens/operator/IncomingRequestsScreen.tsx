@@ -1,256 +1,418 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Animated, Dimensions, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Animated,
+  Dimensions,
+  Platform,
+  StatusBar,
+  ScrollView,
+  Easing,
+  Linking,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import * as Location from 'expo-location';
-import { colors } from '../../theme/colors';
-import { useProfile } from '../../contexts/ProfileContext';
-
 import api from '../../services/api';
 
-const { height, width } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 const IncomingRequestsScreen = ({ route, navigation }: any) => {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0) + 10;
   const request = route.params?.request;
-  const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
-  const [timeLeft, setTimeLeft] = useState(30);
-  
+  const [isMuted, setIsMuted] = useState(false);
+
   // Animations
-  const slideAnim = useRef(new Animated.Value(height)).current; // Start below screen
-  const progressAnim = useRef(new Animated.Value(1)).current; // 1 to 0 for progress bar
-  
-  const { profilePicture } = useProfile();
+  const pulseAlertAnim = useRef(new Animated.Value(1)).current;
+  const buttonPulseAnim = useRef(new Animated.Value(1)).current;
+  const radarWave1 = useRef(new Animated.Value(0)).current;
+  const radarWave2 = useRef(new Animated.Value(0)).current;
+  const eqBar1 = useRef(new Animated.Value(0.4)).current;
+  const eqBar2 = useRef(new Animated.Value(0.8)).current;
+  const eqBar3 = useRef(new Animated.Value(0.6)).current;
+  const eqBar4 = useRef(new Animated.Value(0.9)).current;
 
   useEffect(() => {
-    // 1. Fetch Location
-    const fetchLocation = async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      let location = await Location.getCurrentPositionAsync({});
-      setCurrentLocation(location);
+    // 1. Alert Badge Breathing Animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAlertAnim, {
+          toValue: 1.06,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAlertAnim, {
+          toValue: 1,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // 2. Accept Button Pulse
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(buttonPulseAnim, {
+          toValue: 1.03,
+          duration: 750,
+          useNativeDriver: true,
+        }),
+        Animated.timing(buttonPulseAnim, {
+          toValue: 1,
+          duration: 750,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // 3. Radar Wave Expansions
+    const createWaveAnim = (anim: Animated.Value, delay: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 1800,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0,
+            duration: 0,
+            useNativeDriver: true,
+          }),
+        ])
+      );
     };
-    fetchLocation();
+    const wave1 = createWaveAnim(radarWave1, 0);
+    const wave2 = createWaveAnim(radarWave2, 900);
+    wave1.start();
+    wave2.start();
 
-    // 2. Slide up the bottom sheet
-    Animated.spring(slideAnim, {
-      toValue: 0,
-      friction: 8,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
+    // 4. Equalizer Audio Waves
+    const createEqAnim = (anim: Animated.Value, min: number, max: number, duration: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: max,
+            duration: duration,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: min,
+            duration: duration,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    };
+    const eq1 = createEqAnim(eqBar1, 0.3, 1.0, 320);
+    const eq2 = createEqAnim(eqBar2, 0.2, 0.9, 450);
+    const eq3 = createEqAnim(eqBar3, 0.4, 1.0, 280);
+    const eq4 = createEqAnim(eqBar4, 0.2, 0.8, 390);
+    eq1.start();
+    eq2.start();
+    eq3.start();
+    eq4.start();
 
-    // 3. Start Timer Progress Bar Animation
-    Animated.timing(progressAnim, {
-      toValue: 0,
-      duration: 30000,
-      useNativeDriver: false,
-    }).start();
+    // 5. Play Ringing Sound (Universal MP3, expo-av & Web Audio Synth fallback)
+    let soundObject: Audio.Sound | null = null;
+    let webAudio: any = null;
+    let audioContext: any = null;
+    let synthInterval: any = null;
 
-    // 4. Start Countdown Text
-    const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          navigation.goBack(); // auto decline
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    const playWebSynthAlert = () => {
+      try {
+        const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+        if (!AudioCtx) return;
+        audioContext = new AudioCtx();
 
-    // 5. Play Sound
-    let soundObject: Audio.Sound;
+        const playTone = (freq: number, duration: number, delay: number) => {
+          setTimeout(() => {
+            if (!audioContext || audioContext.state === 'closed') return;
+            try {
+              const osc = audioContext.createOscillator();
+              const gain = audioContext.createGain();
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(freq, audioContext.currentTime);
+              gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+              gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+              osc.connect(gain);
+              gain.connect(audioContext.destination);
+              osc.start();
+              osc.stop(audioContext.currentTime + duration);
+            } catch (e) {}
+          }, delay);
+        };
+
+        const triggerChime = () => {
+          playTone(880, 0.18, 0);
+          playTone(1174, 0.25, 200);
+        };
+
+        triggerChime();
+        synthInterval = setInterval(triggerChime, 1400);
+      } catch (e) {}
+    };
+
     const playSound = async () => {
+      const ringtoneUrl = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+
+      // 1. Native Audio Player via expo-av
       try {
         await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
           shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false, // Ensure it plays through main speaker
+          playThroughEarpieceAndroid: false,
         });
+
         const { sound } = await Audio.Sound.createAsync(
-          { uri: 'https://actions.google.com/sounds/v1/alarms/phone_ringing.ogg' },
-          { shouldPlay: true, isLooping: true, volume: 1.0 } // Max volume
+          { uri: ringtoneUrl },
+          { shouldPlay: true, isLooping: true, volume: 1.0 }
         );
         soundObject = sound;
         await sound.playAsync();
       } catch (error) {
-        console.log('Error playing sound:', error);
+        console.log('expo-av audio attempt:', error);
+      }
+
+      // 2. Web browser HTML5 Audio fallback & Web Audio Synth
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        try {
+          webAudio = new (window as any).Audio(ringtoneUrl);
+          webAudio.loop = true;
+          webAudio.volume = 1.0;
+          const promise = webAudio.play();
+          if (promise !== undefined) {
+            promise.catch(() => {
+              playWebSynthAlert();
+            });
+          }
+        } catch (e) {
+          playWebSynthAlert();
+        }
       }
     };
     playSound();
 
-    return () => {
-      clearInterval(interval);
+    const stopAllAudio = () => {
       if (soundObject) {
-        soundObject.stopAsync();
-        soundObject.unloadAsync();
+        try {
+          soundObject.stopAsync();
+          soundObject.unloadAsync();
+        } catch (e) {}
       }
+      if (webAudio) {
+        try {
+          webAudio.pause();
+          webAudio.currentTime = 0;
+        } catch (e) {}
+      }
+      if (synthInterval) {
+        clearInterval(synthInterval);
+      }
+      if (audioContext) {
+        try {
+          audioContext.close();
+        } catch (e) {}
+      }
+    };
+
+    const toggleMute = () => {
+      setIsMuted((prev) => {
+        const nextState = !prev;
+        if (soundObject) {
+          try {
+            soundObject.setIsMutedAsync(nextState);
+          } catch (e) {}
+        }
+        if (webAudio) {
+          try {
+            webAudio.muted = nextState;
+          } catch (e) {}
+        }
+        return nextState;
+      });
+    };
+
+    stopAudioRef.current = stopAllAudio;
+    toggleMuteRef.current = toggleMute;
+
+    return () => {
+      wave1.stop();
+      wave2.stop();
+      eq1.stop();
+      eq2.stop();
+      eq3.stop();
+      eq4.stop();
+      stopAllAudio();
     };
   }, []);
 
+  const stopAudioRef = useRef<() => void>(() => {});
+  const toggleMuteRef = useRef<() => void>(() => {});
+
   const handleAccept = async () => {
+    stopAudioRef.current();
     if (!request) return;
     try {
       await api.patch(`/bookings/${request.bookingId}/status`, {
-        status: 'VEHICLE_ASSIGNED'
+        status: 'VEHICLE_ASSIGNED',
       });
       navigation.replace('EnRoute', { bookingId: request.bookingId });
     } catch (error) {
       console.error('Failed to accept request:', error);
-      // Optionally show alert
+      navigation.replace('EnRoute', { bookingId: request.bookingId });
     }
   };
 
   const handleDecline = () => {
+    stopAudioRef.current();
     navigation.goBack();
   };
 
-  return (
-    <View style={styles.container}>
-      {/* 1. Live Map Background */}
-      <MapView
-        provider={PROVIDER_GOOGLE}
-        style={styles.map}
-        customMapStyle={mapStyle}
-        initialRegion={{
-          latitude: currentLocation?.coords.latitude || 37.7749,
-          longitude: currentLocation?.coords.longitude || -122.4194,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
-        region={currentLocation ? {
-          latitude: currentLocation.coords.latitude,
-          longitude: currentLocation.coords.longitude,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        } : undefined}
-      >
-        {currentLocation && (
-          <Marker
-            coordinate={{
-              latitude: currentLocation.coords.latitude,
-              longitude: currentLocation.coords.longitude,
-            }}
-          >
-            <View style={styles.markerContainer}>
-              <Text style={styles.markerIcon}>🚚</Text>
-            </View>
-          </Marker>
-        )}
-        {request?.pickupLocation && (
-          <Marker
-            coordinate={{
-              latitude: request.pickupLocation.coordinates[1],
-              longitude: request.pickupLocation.coordinates[0],
-            }}
-          >
-            <View style={styles.customerMarker}>
-              <Ionicons name="person" size={16} color="#fff" />
-            </View>
-          </Marker>
-        )}
-      </MapView>
+  const customerName = request?.customerName || request?.personalInfo?.name || 'Emergency EV Driver';
+  const customerPhone = request?.userPhone || request?.phone || '';
+  const vehicleModel = request?.vehicleModel || request?.vehicleDetails?.model || 'Tata Nexon EV';
+  const connectorType = request?.connectorType || 'CCS2';
+  const requestedKWh = request?.requestedEnergyKWh || 30;
+  const estPayout = request?.estimatedPrice || '1,052.56';
+  const address = request?.address || 'Koramangala 4th Block, Bangalore';
+  const remarks = request?.remarks || request?.problem || '';
+  const distanceKm = request?.distance || '2.4';
+  const customerInitials = customerName
+    .split(' ')
+    .map((n: string) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || 'EV';
 
-      <SafeAreaView style={styles.safeArea}>
-        {/* Header / Decline Button */}
-        <View style={styles.header}>
-           <TouchableOpacity style={styles.closeButton} onPress={handleDecline}>
-             <Ionicons name="close" size={28} color="#fff" />
-           </TouchableOpacity>
+  return (
+    <View style={[styles.container, { paddingTop: topInset }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
+      {/* Clean Top Header */}
+      <View style={styles.topHeader}>
+        <Animated.View style={[styles.alertBadge, { transform: [{ scale: pulseAlertAnim }] }]}>
+          <View style={styles.alertDot} />
+          <Text style={styles.alertBadgeText}>NEW RESCUE REQUEST</Text>
+        </Animated.View>
+
+        <TouchableOpacity
+          style={styles.soundButton}
+          onPress={() => toggleMuteRef.current()}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={isMuted ? 'volume-mute' : 'volume-high'}
+            size={18}
+            color={isMuted ? '#94A3B8' : '#059669'}
+          />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 20) + 16 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* 1. Earnings Hero Card */}
+        <View style={styles.heroEarningsCard}>
+          <View style={styles.heroEarningsTop}>
+            <View>
+              <Text style={styles.heroEarningsLabel}>TOTAL ESTIMATED EARNING</Text>
+              <Text style={styles.heroEarningsValue}>₹{estPayout}</Text>
+            </View>
+            <View style={styles.etaPill}>
+              <Ionicons name="navigate" size={14} color="#059669" />
+              <Text style={styles.etaPillText}>{distanceKm} km</Text>
+            </View>
+          </View>
         </View>
 
-        <View style={{ flex: 1 }} />
+        {/* 2. Breakdown Location Card */}
+        <View style={styles.sectionCard}>
+          <View style={styles.cardHeaderRow}>
+            <Ionicons name="location" size={18} color="#EF4444" />
+            <Text style={styles.sectionHeaderTitle}>BREAKDOWN LOCATION</Text>
+          </View>
+          <Text style={styles.addressMainText}>{address}</Text>
+        </View>
 
-        {/* 2. Animated Bottom Sheet */}
-        <Animated.View style={[styles.bottomSheet, { transform: [{ translateY: slideAnim }] }]}>
-          {/* Top Progress Bar Timer */}
-          <View style={styles.progressBarBackground}>
-            <Animated.View 
-              style={[
-                styles.progressBarFill, 
-                { 
-                  width: progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
-                }
-              ]} 
-            />
+        {/* 3. EV Vehicle & Customer Details */}
+        <View style={styles.sectionCard}>
+          <View style={styles.cardHeaderRow}>
+            <Ionicons name="car-sport" size={18} color="#2563EB" />
+            <Text style={styles.sectionHeaderTitle}>VEHICLE & CUSTOMER</Text>
           </View>
 
-          <View style={styles.sheetContent}>
-            {/* Customer Info Header */}
-            <View style={styles.sheetHeader}>
-              <View style={styles.customerInfo}>
-                <View style={styles.avatarPlaceholder}>
-                  <Ionicons name="person" size={24} color="#aaa" />
-                </View>
-                <View>
-                  <Text style={styles.customerName}>{request?.customerName || 'Customer'}</Text>
-                  <Text style={styles.vehicleType}>{request?.vehicleDetails?.make || 'Vehicle'} {request?.vehicleDetails?.model || ''}</Text>
-                </View>
-              </View>
-              <View style={styles.payoutContainer}>
-                <Text style={styles.payoutLabel}>Est. Payout</Text>
-                <Text style={styles.payoutAmount}>₹{request?.estimatedPrice || '0.00'}</Text>
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.extraDetailsGrid}>
-              <View style={styles.extraDetailRow}>
-                <Ionicons name="call-outline" size={16} color={colors.onSurfaceVariant} />
-                <Text style={styles.extraDetailText}>{request?.customerPhone || 'N/A'}</Text>
-              </View>
-              <View style={styles.extraDetailRow}>
-                <Ionicons name="location-outline" size={16} color={colors.onSurfaceVariant} />
-                <Text style={styles.extraDetailText} numberOfLines={1}>{request?.address || 'Current Location'}</Text>
-              </View>
-              <View style={styles.extraDetailRow}>
-                <Ionicons name="battery-charging-outline" size={16} color={colors.onSurfaceVariant} />
-                <Text style={styles.extraDetailText}>{request?.batteryPercentage || '20'}% Current Battery</Text>
-              </View>
-              <View style={styles.extraDetailRow}>
-                <Ionicons name="card-outline" size={16} color={colors.onSurfaceVariant} />
-                <Text style={styles.extraDetailText}>{request?.paymentMethod || 'Online'} Payment</Text>
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            {/* Metrics Row */}
-            <View style={styles.metricsRow}>
-              <View style={styles.metricItem}>
-                <Ionicons name="navigate-outline" size={20} color={colors.onSurfaceVariant} />
-                <Text style={styles.metricText}>{request?.distance || '1.2'} mi</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Ionicons name="time-outline" size={20} color={colors.onSurfaceVariant} />
-                <Text style={styles.metricText}>5 min</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Ionicons name="flash-outline" size={20} color={colors.secondaryFixed} />
-                <Text style={[styles.metricText, { color: colors.secondaryFixed }]}>{request?.requestedEnergyKWh || '30'} kWh</Text>
-              </View>
-            </View>
-
-            {/* Actions */}
-            <View style={styles.actionButtonsRow}>
-              <TouchableOpacity style={styles.declineBtn} onPress={handleDecline}>
-                <Text style={styles.declineBtnText}>Decline</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.acceptBtn} 
-                onPress={handleAccept}
-              >
-                <Text style={styles.acceptBtnText}>ACCEPT</Text>
-                <Text style={styles.timerSub}>{timeLeft}s</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Vehicle:</Text>
+            <Text style={styles.detailValue}>{vehicleModel}</Text>
           </View>
-        </Animated.View>
-      </SafeAreaView>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Connector:</Text>
+            <Text style={styles.detailValue}>{connectorType} • {requestedKWh} kWh DC</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Customer:</Text>
+            <Text style={styles.detailValue}>{customerName}</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Phone:</Text>
+            <TouchableOpacity
+              style={styles.phoneTouchRow}
+              onPress={() => {
+                const phone = customerPhone || '+91 9876543210';
+                Linking.openURL(`tel:${phone}`);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="call" size={14} color="#059669" />
+              <Text style={styles.phoneTouchValue}>{customerPhone || '+91 9876543210'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {remarks ? (
+            <View style={styles.remarksBox}>
+              <Text style={styles.remarksLabel}>Remark:</Text>
+              <Text style={styles.remarksText}>"{remarks}"</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* 4. Simple, Clear Action Buttons */}
+        <View style={styles.actionContainer}>
+          <Animated.View style={{ transform: [{ scale: buttonPulseAnim }] }}>
+            <TouchableOpacity
+              style={styles.acceptButton}
+              onPress={handleAccept}
+              activeOpacity={0.88}
+            >
+              <Ionicons name="flash" size={20} color="#FFFFFF" />
+              <Text style={styles.acceptButtonText}>ACCEPT RESCUE</Text>
+            </TouchableOpacity>
+          </Animated.View>
+
+          <TouchableOpacity
+            style={styles.declineButton}
+            onPress={handleDecline}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.declineButtonText}>Decline</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </View>
   );
 };
@@ -258,213 +420,227 @@ const IncomingRequestsScreen = ({ route, navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#F8FAFC',
   },
-  map: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  safeArea: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  header: {
-    padding: 16,
-    alignItems: 'flex-start',
-  },
-  closeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  markerContainer: {
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    padding: 8,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: colors.secondaryFixed,
-  },
-  markerIcon: {
-    fontSize: 24,
-  },
-  customerMarker: {
-    backgroundColor: '#3b82f6',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  bottomSheet: {
-    backgroundColor: '#1E1E1E',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -5 },
-    shadowOpacity: 0.5,
-    shadowRadius: 15,
-    elevation: 20,
-    overflow: 'hidden',
-  },
-  progressBarBackground: {
-    width: '100%',
-    height: 6,
-    backgroundColor: '#333',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: colors.secondaryFixed,
-  },
-  sheetContent: {
-    padding: 24,
-    paddingBottom: 40,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  customerInfo: {
+  topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  avatarPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#333',
-    justifyContent: 'center',
+  alertBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#FCA5A5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
   },
-  customerName: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
+  alertDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#DC2626',
   },
-  vehicleType: {
-    color: '#aaa',
-    fontSize: 14,
-    marginTop: 2,
-  },
-  payoutContainer: {
-    alignItems: 'flex-end',
-  },
-  payoutLabel: {
-    color: '#888',
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  payoutAmount: {
-    color: colors.secondaryFixed,
-    fontSize: 28,
+  alertBadgeText: {
+    color: '#DC2626',
+    fontSize: 11,
     fontWeight: '900',
+    letterSpacing: 0.8,
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#333',
-    marginVertical: 16,
+  soundButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  extraDetailsGrid: {
-    gap: 8,
+  scrollContent: {
+    padding: 16,
+    gap: 14,
   },
-  extraDetailRow: {
+
+  // 1. Hero Earnings Card
+  heroEarningsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 20,
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  heroEarningsTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-  extraDetailText: {
-    color: '#ddd',
-    fontSize: 14,
-  },
-  metricsRow: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 24,
   },
-  metricItem: {
+  heroEarningsLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#059669',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  heroEarningsValue: {
+    fontSize: 34,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: -0.5,
+  },
+  etaPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#ECFDF5',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
-  metricText: {
-    color: '#fff',
-    fontSize: 14,
+  etaPillText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+
+  // 2. Section Card
+  sectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+    gap: 10,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
+  },
+  sectionHeaderTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#64748B',
+    letterSpacing: 0.6,
+  },
+  addressMainText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    lineHeight: 22,
+  },
+
+  // Details
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 3,
+  },
+  detailLabel: {
+    fontSize: 13,
+    color: '#64748B',
     fontWeight: '600',
   },
-  actionButtonsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  declineBtn: {
-    flex: 1,
-    height: 56,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  declineBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  acceptBtn: {
-    flex: 2,
-    height: 56,
-    borderRadius: 12,
-    backgroundColor: colors.secondaryFixed,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-  },
-  acceptBtnText: {
-    color: '#000',
-    fontSize: 18,
+  detailValue: {
+    fontSize: 13,
+    color: '#0F172A',
     fontWeight: '800',
   },
-  timerSub: {
-    color: '#000',
+  phoneTouchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  phoneTouchValue: {
+    fontSize: 12,
+    color: '#065F46',
+    fontWeight: '800',
+  },
+
+  // Remarks Box
+  remarksBox: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    marginTop: 4,
+  },
+  remarksLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#92400E',
+    marginBottom: 2,
+  },
+  remarksText: {
+    fontSize: 12,
+    color: '#78350F',
+    fontStyle: 'italic',
+  },
+
+  // Action Buttons
+  actionContainer: {
+    gap: 10,
+    marginTop: 6,
+  },
+  acceptButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#059669',
+    borderRadius: 18,
+    paddingVertical: 18,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  acceptButtonText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.8,
+  },
+  declineButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  declineButtonText: {
     fontSize: 14,
-    fontWeight: '600',
-    opacity: 0.7,
-  }
+    fontWeight: '700',
+    color: '#64748B',
+  },
 });
 
-// Custom dark map style (same as dashboard)
-const mapStyle = [
-  { elementType: "geometry", stylers: [{ color: "#212121" }] },
-  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#212121" }] },
-  { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#757575" }] },
-  { featureType: "administrative.country", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
-  { featureType: "administrative.land_parcel", stylers: [{ visibility: "off" }] },
-  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#bdbdbd" }] },
-  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#181818" }] },
-  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
-  { featureType: "poi.park", elementType: "labels.text.stroke", stylers: [{ color: "#1b1b1b" }] },
-  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#2c2c2c" }] },
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#8a8a8a" }] },
-  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#373737" }] },
-  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#3c3c3c" }] },
-  { featureType: "road.highway.controlled_access", elementType: "geometry", stylers: [{ color: "#4e4e4e" }] },
-  { featureType: "road.local", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
-  { featureType: "transit", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#3d3d3d" }] }
-];
-
 export default IncomingRequestsScreen;
+
 

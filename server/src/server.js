@@ -4,11 +4,13 @@ import { env } from './config/env.js';
 import { connectDB } from './config/database.js';
 import { initSocketManager } from './sockets/socketManager.js';
 import { startCronJobs } from './services/cron.service.js';
+import { seedDemoAccounts } from './services/seed.service.js';
 
 let server;
 
 const startServer = async () => {
   await connectDB();
+  await seedDemoAccounts();
 
   server = http.createServer(app);
 

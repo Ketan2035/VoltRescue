@@ -1,15 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TextInput, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  StatusBar,
+  Platform,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import api from '../../services/api';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 
 const MapScreen = ({ navigation }: any) => {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0) + 6;
   const [isLoading, setIsLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<any>(null);
   const [nearbyVans, setNearbyVans] = useState<any[]>([]);
-  
+  const mapRef = useRef<MapView>(null);
+
   useEffect(() => {
     (async () => {
       let lng = -122.4194;
@@ -20,7 +33,22 @@ const MapScreen = ({ navigation }: any) => {
         let location = await Location.getCurrentPositionAsync({});
         lng = location.coords.longitude;
         lat = location.coords.latitude;
-        setUserLocation({ latitude: lat, longitude: lng });
+        const coords = { latitude: lat, longitude: lng };
+        setUserLocation(coords);
+
+        if (mapRef.current) {
+          try {
+            mapRef.current.animateToRegion(
+              {
+                latitude: lat,
+                longitude: lng,
+                latitudeDelta: 0.04,
+                longitudeDelta: 0.04,
+              },
+              800
+            );
+          } catch (e) {}
+        }
       } else {
         setUserLocation({ latitude: lat, longitude: lng });
       }
@@ -36,18 +64,35 @@ const MapScreen = ({ navigation }: any) => {
     })();
   }, []);
 
+  useEffect(() => {
+    if (userLocation && mapRef.current) {
+      try {
+        mapRef.current.animateToRegion(
+          {
+            latitude: userLocation.latitude,
+            longitude: userLocation.longitude,
+            latitudeDelta: 0.04,
+            longitudeDelta: 0.04,
+          },
+          800
+        );
+      } catch (e) {}
+    }
+  }, [userLocation]);
+
   const handleRequestCharge = async () => {
     setIsLoading(true);
     try {
-      const coords = userLocation ? [userLocation.longitude, userLocation.latitude] : [-122.4194, 37.7749];
-      
+      const coords = userLocation
+        ? [userLocation.longitude, userLocation.latitude]
+        : [-122.4194, 37.7749];
+
       const response = await api.post('/bookings', {
         userLocation: coords,
-        requestedEnergyKWh: 25, 
+        requestedEnergyKWh: 25,
       });
 
       const booking = response.data.data.booking;
-      
       navigation.navigate('Waiting', { bookingId: booking._id });
     } catch (error) {
       console.error('Error creating booking:', error);
@@ -57,192 +102,163 @@ const MapScreen = ({ navigation }: any) => {
     }
   };
 
-  const mapRegion = userLocation ? {
-    latitude: userLocation.latitude,
-    longitude: userLocation.longitude,
-    latitudeDelta: 0.05,
-    longitudeDelta: 0.05,
-  } : {
-    latitude: 37.7749,
-    longitude: -122.4194,
-    latitudeDelta: 0.05,
-    longitudeDelta: 0.05,
-  };
+  const mapRegion = userLocation
+    ? {
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      }
+    : {
+        latitude: 37.7749,
+        longitude: -122.4194,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: topInset }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       {/* Top Header */}
       <View style={styles.header}>
-        <View style={styles.logoRow}>
-          <Text style={styles.logoText}>VoltRescue</Text>
-        </View>
-        <View style={styles.searchContainer}>
-          <TextInput 
-            style={styles.searchInput} 
-            placeholder="Where is your EV parked?" 
-            placeholderTextColor={colors.onSurfaceVariant}
-          />
-        </View>
-        <TouchableOpacity style={styles.profileImageContainer}>
-          <Image 
-            source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuATSW_gLWTKu6Sv8oaJ2EF91m642Omp5wbWacnMFp-N1-t3xVsiW0aMwmtgyq82OgAEpscQ8dQgcS-ALSn3u0ISyy9NxiQXfr3QAD3_fiqUdg1mm_HwPj-Om0W66ihZwrquRfg-2xVj38l0KuijamO8VqeLiBhojRZQF9QM3qDskru5P0lJ-1uNMXzmtEzDKFgm9FSPBWRMUrVaMiU5-EYmT1j7u-PcGJu_ONz7M-Hs5Pyukg7kKp31mqA0MVhui__yjZiaBkQX0TLq' }}
-            style={styles.profileImage}
-          />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={22} color="#0F172A" />
         </TouchableOpacity>
+        <View style={styles.brandRow}>
+          <View style={styles.brandIconBox}>
+            <Ionicons name="flash" size={16} color="#059669" />
+          </View>
+          <Text style={styles.brandTitle}>VOLTRESCUE MAP</Text>
+        </View>
+        <View style={{ width: 40 }} />
       </View>
 
       {/* Map Area */}
       <View style={styles.mapArea}>
-        <MapView 
-          style={styles.mapImage} 
-          region={mapRegion}
+        <MapView
+          ref={mapRef}
+          provider={PROVIDER_GOOGLE}
+          style={StyleSheet.absoluteFillObject}
+          initialRegion={mapRegion}
           showsUserLocation={true}
-          customMapStyle={mapStyle}
         >
-          {nearbyVans.map((van, index) => {
-             const distMeters = van.dist?.calculated || 0;
-             const etaMinutes = Math.max(1, Math.round(distMeters / 400));
-             let lat = van.location?.coordinates[1];
-             let lng = van.location?.coordinates[0];
-             
-             if (!lat || !lng) return null;
-             
-             const jitterLat = (Math.sin(index * 999) * 0.005);
-             const jitterLng = (Math.cos(index * 999) * 0.005);
-             
-             lat += jitterLat;
-             lng += jitterLng;
+          {userLocation && (
+            <Marker coordinate={userLocation} title="Your Breakdown Location">
+              <View style={styles.userMarker}>
+                <Ionicons name="location" size={18} color="#FFFFFF" />
+              </View>
+            </Marker>
+          )}
 
-             return (
-               <Marker key={van._id || index} coordinate={{ latitude: lat, longitude: lng }}>
-                 <View style={styles.vanMarkerLabel}>
-                   <Text style={styles.vanMarkerText}>{etaMinutes}m eta</Text>
-                 </View>
-                 <View style={[styles.vanMarkerDot, van.status !== 'ONLINE' && { backgroundColor: '#888', borderColor: 'transparent' }]} />
-               </Marker>
-             );
+          {nearbyVans.map((van, index) => {
+            const lat =
+              van.location?.coordinates?.[1] ||
+              (userLocation?.latitude || 37.7749) + (index * 0.005 - 0.002);
+            const lng =
+              van.location?.coordinates?.[0] ||
+              (userLocation?.longitude || -122.4194) + (index * 0.005 - 0.002);
+
+            return (
+              <Marker key={van._id || index} coordinate={{ latitude: lat, longitude: lng }}>
+                <View style={styles.vanMarker}>
+                  <Ionicons name="flash" size={14} color="#FFFFFF" />
+                </View>
+              </Marker>
+            );
           })}
         </MapView>
       </View>
 
       {/* Bottom Sheet */}
-      <View style={styles.bottomSheet}>
+      <View style={[styles.bottomSheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
         <View style={styles.sheetHeader}>
           <View>
-            <Text style={styles.sheetTitle}>Charge Request</Text>
-            <Text style={styles.sheetSubtitle}>Tesla Model S • SF Downtown Hub</Text>
+            <Text style={styles.sheetTitle}>On-Demand EV Rescue</Text>
+            <Text style={styles.sheetSubtitle}>High-speed mobile charging dispatched to you</Text>
           </View>
           <View style={styles.etaBadge}>
-            <Text style={styles.etaText}>5-8 MIN</Text>
+            <Text style={styles.etaText}>5-8 MIN ETA</Text>
           </View>
         </View>
 
         <View style={styles.optionsRow}>
-          <TouchableOpacity style={[styles.optionCard, styles.optionActive]}>
+          <View style={[styles.optionCard, styles.optionActive]}>
             <View style={styles.optionPriceRow}>
-              <Text style={styles.optionPrice}>₹24.00</Text>
+              <Text style={styles.optionPrice}>₹28.00<Text style={styles.unitText}>/kWh</Text></Text>
             </View>
-            <Text style={styles.optionTitle}>Fast Charge</Text>
-            <Text style={styles.optionDesc}>250kW Hyper-speed recovery</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.optionCard}>
+            <Text style={styles.optionTitle}>Rapid DC Fast</Text>
+            <Text style={styles.optionDesc}>Up to 150kW high-speed delivery</Text>
+          </View>
+
+          <View style={styles.optionCard}>
             <View style={styles.optionPriceRow}>
-              <Text style={styles.optionPrice}>₹14.00</Text>
+              <Text style={styles.optionPrice}>₹18.00<Text style={styles.unitText}>/kWh</Text></Text>
             </View>
-            <Text style={styles.optionTitle}>Standard</Text>
-            <Text style={styles.optionDesc}>50kW Balanced charging</Text>
-          </TouchableOpacity>
+            <Text style={styles.optionTitle}>Standard Rescue</Text>
+            <Text style={styles.optionDesc}>50kW Balanced recovery flow</Text>
+          </View>
         </View>
 
-        <View style={styles.paymentRow}>
-          <Text style={styles.paymentText}>•••• 4242</Text>
-          <TouchableOpacity>
-            <Text style={styles.changeText}>CHANGE</Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.requestButton}
           onPress={handleRequestCharge}
           disabled={isLoading}
+          activeOpacity={0.85}
         >
           {isLoading ? (
-            <ActivityIndicator color={colors.onPrimaryContainer} />
+            <ActivityIndicator color="#FFFFFF" />
           ) : (
             <Text style={styles.requestButtonText}>REQUEST CHARGE NOW</Text>
           )}
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
-
-const mapStyle = [
-  { "elementType": "geometry", "stylers": [{ "color": "#242f3e" }] },
-  { "elementType": "labels.text.fill", "stylers": [{ "color": "#746855" }] },
-  { "elementType": "labels.text.stroke", "stylers": [{ "color": "#242f3e" }] },
-  { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
-  { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
-  { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#263c3f" }] },
-  { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#6b9a76" }] },
-  { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#38414e" }] },
-  { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#212a37" }] },
-  { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#9ca5b3" }] },
-  { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#746855" }] },
-  { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1f2835" }] },
-  { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#f3d19c" }] },
-  { "featureType": "transit", "elementType": "geometry", "stylers": [{ "color": "#2f3948" }] },
-  { "featureType": "transit.station", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
-  { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#17263c" }] },
-  { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#515c6d" }] },
-  { "featureType": "water", "elementType": "labels.text.stroke", "stylers": [{ "color": "#17263c" }] }
-];
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F8FAFC',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    zIndex: 10,
-    backgroundColor: 'rgba(19, 19, 19, 0.8)',
     justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logoText: {
-    color: colors.primary,
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  searchContainer: {
-    flex: 1,
-    marginHorizontal: 16,
-  },
-  searchInput: {
-    backgroundColor: colors.surfaceVariant,
-    color: colors.onSurface,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  profileImageContainer: {
+  backBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    overflow: 'hidden',
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(173, 198, 255, 0.2)',
+    borderColor: '#E2E8F0',
   },
-  profileImage: {
-    width: '100%',
-    height: '100%',
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  brandIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandTitle: {
+    color: '#059669',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
   mapArea: {
     flex: 1,
@@ -250,125 +266,136 @@ const styles = StyleSheet.create({
   mapImage: {
     ...StyleSheet.absoluteFillObject,
   },
-  vanMarkerLabel: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginBottom: 4,
-    alignSelf: 'center',
+  userMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#059669',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  vanMarkerText: {
-    color: colors.secondaryFixed,
-    fontSize: 10,
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-  },
-  vanMarkerDot: {
-    width: 12,
-    height: 12,
-    backgroundColor: colors.secondaryFixed,
-    borderRadius: 6,
-    alignSelf: 'center',
+  vanMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#059669',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   bottomSheet: {
-    backgroundColor: 'rgba(25, 25, 25, 0.95)',
+    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
+    padding: 20,
+    paddingBottom: 36,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   sheetHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   sheetTitle: {
-    color: colors.primary,
-    fontSize: 24,
-    fontWeight: 'bold',
+    color: '#0F172A',
+    fontSize: 18,
+    fontWeight: '800',
   },
   sheetSubtitle: {
-    color: colors.onSurfaceVariant,
+    color: '#64748B',
     fontSize: 12,
-    marginTop: 4,
+    marginTop: 2,
   },
   etaBadge: {
-    backgroundColor: 'rgba(121, 255, 91, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
   etaText: {
-    color: colors.secondaryFixed,
-    fontSize: 12,
-    fontWeight: 'bold',
+    color: '#059669',
+    fontSize: 11,
+    fontWeight: '800',
   },
   optionsRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
+    gap: 10,
+    marginBottom: 16,
   },
   optionCard: {
     flex: 1,
-    padding: 16,
+    padding: 14,
     borderRadius: 16,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
   },
   optionActive: {
-    borderColor: 'rgba(121, 255, 91, 0.5)',
-    backgroundColor: 'rgba(121, 255, 91, 0.05)',
+    borderColor: '#059669',
+    backgroundColor: '#ECFDF5',
   },
   optionPriceRow: {
-    marginBottom: 12,
+    marginBottom: 6,
   },
   optionPrice: {
-    color: colors.onSurface,
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: '#0F172A',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  unitText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
   },
   optionTitle: {
-    color: colors.onSurface,
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
+    color: '#0F172A',
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 2,
   },
   optionDesc: {
-    color: colors.onSurfaceVariant,
+    color: '#64748B',
     fontSize: 11,
-  },
-  paymentRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 8,
-  },
-  paymentText: {
-    color: colors.onSurface,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  changeText: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: 'bold',
+    lineHeight: 14,
   },
   requestButton: {
-    backgroundColor: colors.primaryContainer,
+    backgroundColor: '#059669',
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   requestButtonText: {
-    color: colors.onPrimaryContainer,
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });
 

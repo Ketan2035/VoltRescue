@@ -82,3 +82,18 @@ export const getMe = async (req, res, next) => {
     next(error);
   }
 };
+
+export const getCustomerMe = async (req, res, next) => {
+  try {
+    if (!req.customerId) {
+      return res.status(401).json({ status: 'error', message: 'Not authorized as customer' });
+    }
+    const customer = await authService.getCustomerProfile(req.customerId);
+    res.status(200).json({
+      status: 'success',
+      data: { customer }
+    });
+  } catch (error) {
+    next(error);
+  }
+};

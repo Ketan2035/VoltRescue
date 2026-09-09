@@ -1,158 +1,110 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Platform, StatusBar } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 
 const RequestDetailsScreen = ({ navigation }: any) => {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0) + 6;
+
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: topInset }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
       {/* Top Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>JOB REQUEST</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.notificationButton}>
-            <Text style={styles.notificationIcon}>🔔</Text>
-            <View style={styles.notificationDot} />
-          </TouchableOpacity>
-          <View style={styles.avatarBox}>
-            <Image 
-              source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCyqYySHFE9p0mdaE4q9btd-8FSOjBadMEYxGNF1yvovcA3-ZCm7ge_RxFKBjwDdzJkiODcD7a3eeRRZCpJCig7mrkKLATscg2rNmZRO7-lwhcH_98l23UbMqonuUJ0NdAjx0bZBoVTdYbkRe0FN9kPA71G3BptTzmn7rRv_Wfm2YVUOmcTplrVV08tgb9cRD3kbd597r_quhimT4Q5hY0A8cz8oAOrWfBlSuh98k67vFj5XMcxEyuwTxXFpDsqjYAaCnwG8_7jrHJH' }}
-              style={styles.avatar}
-            />
-          </View>
-        </View>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={22} color="#0F172A" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Job Request Details</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Customer Profile Card */}
         <View style={styles.card}>
           <View style={styles.customerLeft}>
             <View style={styles.customerAvatarBox}>
-              <Image 
-                source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC6x5udI1eOO1NCy97JKxJ6XD15dHrNjYrS3Y8COC1ZVQDZefZxqTogj07ZlIV1KkL0XS_SCTlOKPrS_f4YO36k6-C2Cb2yFh6crDkIXexxaLCaYeK9CP-z2x19fQMNoHzBPghcmG0a7uJbfuB2Fo75Ag_UDYiwKJDFqQGWIhAT1bQ2LFFp3tI6zQpanIlXGnZGfM0OkCagVfdwEpIvBgVWkkXwQL7b-7hVdWL-sr9uQYjoOQzw9387JjJtHkf1WCoC0FVth64TDNzO' }}
-                style={styles.customerAvatar}
-              />
+              <Ionicons name="person" size={24} color="#64748B" />
               <View style={styles.goldBadge}>
-                <Text style={styles.goldBadgeText}>GOLD</Text>
+                <Ionicons name="star" size={8} color="#FFFFFF" />
               </View>
             </View>
             <View>
               <Text style={styles.customerName}>Sarah K.</Text>
               <View style={styles.ratingRow}>
-                <Text style={styles.starIcon}>★</Text>
-                <Text style={styles.ratingText}>4.9 • Gold Tier</Text>
+                <Ionicons name="star" size={12} color="#F59E0B" />
+                <Text style={styles.ratingText}>4.9 • Gold Member</Text>
               </View>
             </View>
           </View>
           <View style={styles.customerActions}>
-            <TouchableOpacity style={styles.actionCircleButton}>
-              <Text style={styles.actionCircleIcon}>💬</Text>
+            <TouchableOpacity style={styles.actionCircleButton} activeOpacity={0.7}>
+              <Ionicons name="chatbubble" size={18} color="#059669" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionCircleButton}>
-              <Text style={styles.actionCircleIcon}>📞</Text>
+            <TouchableOpacity style={styles.actionCircleButton} activeOpacity={0.7}>
+              <Ionicons name="call" size={18} color="#059669" />
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Vehicle Identification Card */}
         <View style={styles.vehicleCard}>
-          <View style={styles.vehicleImageContainer}>
-            <Image 
-              source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD9PKuS7HtdTb5nXdO00ZJTzP3MwGIj1S9pyCKHoBqzGEQm0_q3_-s9z3S0ly5uI_CfoYzdS5BbUEzZ3x1swsDZRePt-EGjbQH-sVcbDeek5eFIzzODYbsDpVquM_GJT1aP0vD-rpB27T1tQE2Z-MEYGb5M9LJi-01ctVXLlOLvC2OjOlznY4H9Lny4E6Ekgyi6Vk8ptGBCOWaAmMNLH4XxIVvr-Q56HWpYzmSc02I6ePym7La8hn2ZZSU06Pg8nLo1AvnkApuyJ274' }}
-              style={styles.vehicleImage}
-            />
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedBadgeText}>✓ VERIFIED</Text>
+          <View style={styles.vehicleHeader}>
+            <View style={styles.vehiclePill}>
+              <Ionicons name="shield-checkmark" size={14} color="#059669" />
+              <Text style={styles.verifiedBadgeText}>VERIFIED EV</Text>
             </View>
           </View>
           <View style={styles.vehicleInfoRow}>
             <View>
-              <Text style={styles.vehicleLabel}>TESLA MODEL Y</Text>
-              <Text style={styles.vehicleColor}>Pearl White</Text>
+              <Text style={styles.vehicleName}>Tesla Model Y</Text>
+              <Text style={styles.vehicleColor}>Pearl White • AWD Long Range</Text>
             </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.vehicleLabel}>PLATE</Text>
-              <View style={styles.plateBox}>
-                <Text style={styles.plateText}>EV-982-SK</Text>
-              </View>
+            <View style={styles.plateBox}>
+              <Text style={styles.plateText}>EV-982-SK</Text>
             </View>
           </View>
         </View>
 
-        {/* Logistics & Map Snippet */}
+        {/* Logistics & Location */}
         <View style={styles.logisticsCard}>
-          <View style={styles.mapSnippetBox}>
-             <Image 
-                source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCG_oKlBx14hSHaRN2eugXmGnzY8ByISfruKeNkWVBZv5E7RxJLao3jUQkdXZ3nyEjK-XutIVth_Jw3xbrRKHrWgX5BKOsbwtH60gHBz-BFFICqSmeviQ6WuLVyJ1u3n2BGnrWJPqIeuUhXiOy2tT12NfmkA0WfZH_d5tktpTUVfRgg8PVLpIokttPSJEgFx--gOvPGiyUTkpvsrmlTBql5TfrBVvWEl-9Oi6AofdzasSJEKJcTQlnkQadQBOPLOz8SqXo1skgFriX-' }}
-                style={styles.mapSnippetImage}
-             />
-             <View style={styles.mapSnippetOverlay}>
-                <View style={styles.routeContainer}>
-                  <View style={styles.dotStart} />
-                  <View style={styles.routeLine} />
-                  <Text style={styles.pinEnd}>📍</Text>
-                </View>
-             </View>
+          <View style={styles.addressRow}>
+            <View style={styles.addressIconBox}>
+              <Ionicons name="location" size={20} color="#059669" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.addressText}>1230 Ocean Ave, Unit 4B</Text>
+              <Text style={styles.distanceText}>1.2 km • ~6 mins away</Text>
+            </View>
           </View>
-          <View style={styles.logisticsInfo}>
-            <View style={styles.addressRow}>
-              <View style={styles.addressIconBox}>
-                <Text style={styles.addressIcon}>📍</Text>
-              </View>
-              <View>
-                <Text style={styles.addressText}>1230 Ocean Ave, Unit 4B</Text>
-                <Text style={styles.distanceText}>1.2 mi • 6 mins away</Text>
-              </View>
-            </View>
-            <View style={styles.instructionsBox}>
-              <Text style={styles.instructionsLabel}>INSTRUCTIONS</Text>
-              <Text style={styles.instructionsText}>Parked in rear alley, gate code 1234. Please call upon arrival for gate access.</Text>
-            </View>
+          <View style={styles.instructionsBox}>
+            <Text style={styles.instructionsLabel}>DRIVER INSTRUCTIONS</Text>
+            <Text style={styles.instructionsText}>Parked in rear alley, gate code 1234. Please call upon arrival for gate access.</Text>
           </View>
         </View>
 
         {/* Technical Charging Specs Grid */}
         <View style={styles.specsGrid}>
           <View style={styles.specCard}>
-            <View>
-              <Text style={styles.specIcon}>🔋</Text>
-              <Text style={styles.specLabel}>Current Level</Text>
-            </View>
-            <Text style={styles.specValue}>12%</Text>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: '12%', backgroundColor: colors.error }]} />
-            </View>
+            <Text style={styles.specLabel}>Current Battery</Text>
+            <Text style={[styles.specValue, { color: '#DC2626' }]}>12%</Text>
           </View>
 
           <View style={styles.specCard}>
-            <View>
-              <Text style={styles.specIcon}>⚡</Text>
-              <Text style={styles.specLabel}>Target Level</Text>
-            </View>
-            <Text style={styles.specValue}>80%</Text>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: '80%', backgroundColor: colors.secondaryFixed }]} />
-            </View>
+            <Text style={styles.specLabel}>Target Battery</Text>
+            <Text style={[styles.specValue, { color: '#059669' }]}>80%</Text>
           </View>
 
           <View style={styles.specCard}>
-            <View>
-              <Text style={styles.specIcon}>🔌</Text>
-              <Text style={styles.specLabel}>Energy Needed</Text>
-            </View>
-            <Text style={styles.specValue}>58 <Text style={styles.specUnit}>kWh</Text></Text>
+            <Text style={styles.specLabel}>Energy Needed</Text>
+            <Text style={styles.specValue}>35 <Text style={styles.specUnit}>kWh</Text></Text>
           </View>
 
           <View style={styles.specCard}>
-            <View>
-              <Text style={styles.specIcon}>🔌</Text>
-              <Text style={styles.specLabel}>Connector</Text>
-            </View>
-            <Text style={styles.specValueSmall}>CCS2 <Text style={styles.specUnitUppercase}>UNIVERSAL</Text></Text>
+            <Text style={styles.specLabel}>Connector</Text>
+            <Text style={styles.specValue}>CCS2</Text>
           </View>
         </View>
 
@@ -160,395 +112,283 @@ const RequestDetailsScreen = ({ navigation }: any) => {
         <View style={styles.financialCard}>
           <View style={styles.financialLeft}>
             <View style={styles.moneyIconBox}>
-              <Text style={styles.moneyIcon}>💵</Text>
+              <Ionicons name="cash" size={20} color="#059669" />
             </View>
-            <Text style={styles.financialLabel}>Estimated Payout</Text>
+            <Text style={styles.financialLabel}>Estimated Rescuer Payout</Text>
           </View>
-          <Text style={styles.financialValue}>₹42.50</Text>
+          <Text style={styles.financialValue}>₹950.00</Text>
         </View>
-
       </ScrollView>
 
       {/* Bottom Action Area */}
-      <View style={styles.bottomActions}>
+      <View style={[styles.bottomActions, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         <TouchableOpacity 
           style={styles.acceptButton}
           onPress={() => navigation.navigate('StartCharging')}
+          activeOpacity={0.85}
         >
-          <Text style={styles.acceptButtonText}>ACCEPT REQUEST</Text>
+          <Ionicons name="flash" size={20} color="#FFFFFF" />
+          <Text style={styles.acceptButtonText}>ACCEPT RESCUE REQUEST</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.declineButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.declineButton} onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <Text style={styles.declineButtonText}>Decline Request</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F8FAFC',
   },
   header: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    paddingTop: 50,
-    backgroundColor: 'rgba(19, 19, 19, 0.8)',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomColor: '#E2E8F0',
   },
-  headerLeft: {
-    flexDirection: 'row',
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
-    gap: 12,
-  },
-  backButton: {
-    padding: 4,
-  },
-  backIcon: {
-    color: colors.primary,
-    fontSize: 24,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   headerTitle: {
-    color: colors.primary,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  notificationButton: {
-    position: 'relative',
-  },
-  notificationIcon: {
-    fontSize: 20,
-    color: colors.onSurfaceVariant,
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.secondaryFixed,
-  },
-  avatarBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(173,198,255,0.2)',
-    overflow: 'hidden',
-  },
-  avatar: {
-    width: '100%',
-    height: '100%',
+    color: '#0F172A',
+    fontSize: 17,
+    fontWeight: '800',
   },
   scrollContent: {
-    padding: 16,
+    padding: 20,
     paddingBottom: 160,
     gap: 16,
   },
   card: {
-    backgroundColor: 'rgba(32,31,31,0.8)',
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   customerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
   },
   customerAvatarBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
-  },
-  customerAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 2,
-    borderColor: colors.secondaryFixed,
   },
   goldBadge: {
     position: 'absolute',
-    bottom: -4,
-    right: -4,
-    backgroundColor: colors.secondaryFixed,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#F59E0B',
+    width: 16,
+    height: 16,
     borderRadius: 8,
-  },
-  goldBadgeText: {
-    color: colors.onSecondary,
-    fontSize: 8,
-    fontWeight: 'bold',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   customerName: {
-    color: colors.onSurface,
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: '#0F172A',
+    fontSize: 17,
+    fontWeight: '800',
   },
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 4,
-  },
-  starIcon: {
-    color: colors.secondaryFixed,
-    fontSize: 14,
+    marginTop: 2,
   },
   ratingText: {
-    color: colors.onSurfaceVariant,
-    fontSize: 12,
+    color: '#64748B',
+    fontSize: 13,
+    fontWeight: '600',
   },
   customerActions: {
     flexDirection: 'row',
     gap: 8,
   },
   actionCircleButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.surfaceContainerHigh,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#ECFDF5',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  actionCircleIcon: {
-    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
   vehicleCard: {
-    backgroundColor: 'rgba(32,31,31,0.8)',
-    borderRadius: 16,
-    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: '#E2E8F0',
   },
-  vehicleImageContainer: {
-    height: 180,
-    position: 'relative',
+  vehicleHeader: {
+    flexDirection: 'row',
+    marginBottom: 12,
   },
-  vehicleImage: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  verifiedBadge: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    backgroundColor: 'rgba(19,19,19,0.6)',
-    paddingHorizontal: 12,
+  vehiclePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(121,255,91,0.3)',
+    borderRadius: 8,
   },
   verifiedBadgeText: {
-    color: colors.secondaryFixed,
-    fontSize: 10,
-    fontWeight: 'bold',
+    color: '#059669',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   vehicleInfoRow: {
-    padding: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  vehicleLabel: {
-    color: colors.onSurfaceVariant,
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-    marginBottom: 4,
+  vehicleName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
   },
   vehicleColor: {
-    color: colors.onSurface,
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
   },
   plateBox: {
-    backgroundColor: 'rgba(229,226,225,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(229,226,225,0.1)',
-    paddingHorizontal: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#0F172A',
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 4,
-    marginTop: 4,
+    borderRadius: 6,
   },
   plateText: {
-    color: colors.onSurface,
-    fontSize: 16,
-    fontWeight: 'bold',
     fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 13,
+    color: '#0F172A',
+    letterSpacing: 1,
   },
   logisticsCard: {
-    backgroundColor: 'rgba(32,31,31,0.8)',
-    borderRadius: 16,
-    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  mapSnippetBox: {
-    height: 160,
-    position: 'relative',
-  },
-  mapSnippetImage: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.8,
-  },
-  mapSnippetOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  routeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  dotStart: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-  },
-  routeLine: {
-    width: 80,
-    height: 2,
-    backgroundColor: 'rgba(121,255,91,0.5)',
-    borderStyle: 'dashed',
-  },
-  pinEnd: {
-    fontSize: 32,
-    color: colors.secondaryFixed,
-  },
-  logisticsInfo: {
-    padding: 20,
-    gap: 16,
+    borderColor: '#E2E8F0',
+    gap: 14,
   },
   addressRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
   },
   addressIconBox: {
-    backgroundColor: 'rgba(121,255,91,0.1)',
-    padding: 8,
-    borderRadius: 8,
-  },
-  addressIcon: {
-    fontSize: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addressText: {
-    color: colors.onSurface,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   distanceText: {
-    color: colors.onSurfaceVariant,
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
   },
   instructionsBox: {
-    backgroundColor: colors.surfaceContainerLowest,
-    padding: 16,
-    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: '#E2E8F0',
   },
   instructionsLabel: {
-    color: colors.secondaryFixed,
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    letterSpacing: 1,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.6,
+    marginBottom: 4,
   },
   instructionsText: {
-    color: 'rgba(229,226,225,0.8)',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    color: '#334155',
+    lineHeight: 18,
   },
   specsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
+    gap: 12,
   },
   specCard: {
-    width: '47%',
-    backgroundColor: 'rgba(32,31,31,0.8)',
+    width: '48%',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 16,
+    padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    justifyContent: 'space-between',
-    minHeight: 110,
-  },
-  specIcon: {
-    fontSize: 16,
-    marginBottom: 8,
+    borderColor: '#E2E8F0',
   },
   specLabel: {
-    color: colors.onSurfaceVariant,
-    fontSize: 10,
-    fontWeight: 'bold',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 4,
   },
   specValue: {
-    color: colors.onSurface,
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 8,
-  },
-  specValueSmall: {
-    color: colors.onSurface,
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 8,
-  },
-  progressTrack: {
-    width: '100%',
-    height: 6,
-    backgroundColor: colors.surfaceVariant,
-    borderRadius: 3,
-    marginTop: 12,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
   },
   specUnit: {
-    fontSize: 14,
-    fontWeight: 'normal',
-    color: colors.onSurfaceVariant,
-  },
-  specUnitUppercase: {
-    fontSize: 10,
-    fontWeight: 'normal',
-    color: colors.onSurfaceVariant,
-    textTransform: 'uppercase',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
   },
   financialCard: {
-    backgroundColor: 'rgba(32,31,31,0.8)',
-    borderRadius: 16,
-    padding: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.secondaryFixed,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
   },
   financialLeft: {
     flexDirection: 'row',
@@ -556,55 +396,70 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   moneyIconBox: {
-    backgroundColor: 'rgba(121,255,91,0.1)',
-    padding: 8,
-    borderRadius: 8,
-  },
-  moneyIcon: {
-    fontSize: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   financialLabel: {
-    color: colors.onSurface,
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   financialValue: {
-    color: colors.secondaryFixed,
-    fontSize: 28,
-    fontWeight: 'bold',
-    letterSpacing: -0.5,
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#059669',
   },
   bottomActions: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(19,19,19,0.9)',
-    padding: 20,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.05)',
+    borderTopColor: '#E2E8F0',
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 8,
   },
   acceptButton: {
-    backgroundColor: colors.secondaryFixed,
-    paddingVertical: 16,
-    borderRadius: 16,
+    height: 52,
+    backgroundColor: '#059669',
+    borderRadius: 14,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   acceptButtonText: {
-    color: colors.onSecondary,
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   declineButton: {
-    paddingVertical: 12,
+    height: 44,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   declineButtonText: {
-    color: colors.onSurfaceVariant,
+    color: '#64748B',
     fontSize: 14,
-    fontWeight: '500',
-  }
+    fontWeight: '700',
+  },
 });
 
 export default RequestDetailsScreen;

@@ -30,36 +30,43 @@ export const useBookingState = (initialBookingId?: string) => {
         switch (data.status) {
           case 'VEHICLE_ASSIGNED':
           case 'DRIVER_STARTED':
+          case 'OPERATOR_NAVIGATING':
             navigation.navigate(isOperator ? 'EnRoute' : 'CustomerEnRoute', { bookingId });
             break;
           case 'ARRIVING':
-            navigation.navigate('StartCharging', { bookingId });
+          case 'OPERATOR_ARRIVED':
+          case 'OTP_VERIFIED':
+            navigation.navigate('StartCharging', { bookingId, isOperator });
             break;
           case 'CHARGING_STARTED':
           case 'CHARGING_IN_PROGRESS':
-            navigation.navigate('LiveCharging', { bookingId });
+            navigation.navigate(isOperator ? 'ChargingControls' : 'LiveCharging', { bookingId });
             break;
           case 'CHARGING_COMPLETED':
           case 'INVOICE_GENERATED':
-            navigation.navigate('BillGeneration', { bookingId });
-            break;
           case 'PAYMENT_PENDING':
-          case 'PAYMENT_SUCCESS':
-            navigation.navigate('Payment', { bookingId });
+            navigation.navigate(isOperator ? 'BillGeneration' : 'Payment', { bookingId });
             break;
+          case 'PAYMENT_SUCCESS':
+          case 'COMPLETED':
           case 'BOOKING_COMPLETED':
-            navigation.dispatch(
-              CommonActions.reset({
-                index: 0,
-                routes: [{ name: 'CustomerDashboard' }],
-              })
-            );
+            if (isOperator) {
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [{ name: 'DriverDashboard' }],
+                })
+              );
+            } else {
+              // Allow customer to see payment confirmation before returning
+              navigation.navigate('Payment', { bookingId });
+            }
             break;
           case 'CANCELLED':
              navigation.dispatch(
               CommonActions.reset({
                 index: 0,
-                routes: [{ name: 'CustomerDashboard' }],
+                routes: [{ name: isOperator ? 'DriverDashboard' : 'CustomerDashboard' }],
               })
             );
             alert(data.reason || 'Booking was cancelled.');

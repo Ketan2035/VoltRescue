@@ -15,9 +15,27 @@ export const errorHandler = (err, req, res, next) => {
     message = 'Resource not found';
   }
 
+  // Handle MongoDB duplicate key error (E11000)
+  if (err.code === 11000) {
+    statusCode = 400;
+    const field = Object.keys(err.keyValue || {})[0] || 'Field';
+    message = `An account with this ${field} already exists.`;
+  }
+
+  // Handle Mongoose Validation Error
+  if (err.name === 'ValidationError') {
+    statusCode = 400;
+    message = Object.values(err.errors).map((val) => val.message).join(', ');
+  }
+
   // If it's our custom AppError
   if (err.statusCode) {
     statusCode = err.statusCode;
+  }
+
+  console.error(`🚨 [API Error] ${req.method} ${req.originalUrl} - Status: ${statusCode} - Message: ${message}`);
+  if (statusCode === 500 && err.stack) {
+    console.error(err.stack);
   }
 
   res.status(statusCode).json({

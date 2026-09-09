@@ -6,7 +6,7 @@ dotenv.config();
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().default('5000'),
-  MONGO_URI: z.string().url().default('mongodb://localhost:27017/voltrescue'),
+  MONGO_URI: z.string().min(1).default('mongodb://localhost:27017/voltrescue'),
   JWT_SECRET: z.string().min(16).default('supersecretjwtkeyforvoltrescue1234'),
   JWT_EXPIRES_IN: z.string().default('7d'),
 });

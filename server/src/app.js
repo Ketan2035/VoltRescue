@@ -4,7 +4,6 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 
 import { errorHandler, notFound } from './middlewares/error.middleware.js';
-// Routes will be imported here
 import routes from './routes/index.js';
 
 const app = express();
@@ -21,14 +20,19 @@ app.use(express.json());
 // Parse urlencoded request body
 app.use(express.urlencoded({ extended: true }));
 
-// Sanitize data against NoSQL query injection
-// Disabled for Express v5 compatibility
-// app.use(mongoSanitize());
+// Root healthcheck for Render / cloud monitoring
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'VoltRescue Backend API',
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+  windowMs: 15 * 60 * 1000,
+  max: 500, // Generous limit for real-time mobile GPS updates
   message: 'Too many requests from this IP, please try again later.',
 });
 app.use('/api', limiter);

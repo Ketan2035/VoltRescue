@@ -2,6 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import WelcomeScreen from './src/screens/common/WelcomeScreen';
 import CustomerDashboardScreen from './src/screens/customer/CustomerDashboardScreen';
@@ -35,41 +36,43 @@ const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
-    <ProfileProvider>
-      <SocketProvider>
-        <NavigationContainer>
-        <StatusBar style="light" />
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="Welcome" component={WelcomeScreen} />
-          <Stack.Screen name="CustomerDashboard" component={CustomerDashboardScreen} />
-          <Stack.Screen name="BookingWizard" component={BookingWizardScreen} />
-          <Stack.Screen name="NearbyVans" component={NearbyVansScreen} />
-          <Stack.Screen name="DriverAuth" component={DriverAuthScreen} />
-          <Stack.Screen name="Waiting" component={WaitingScreen} />
-          <Stack.Screen name="DriverDashboard" component={DriverDashboardScreen} />
-          <Stack.Screen name="EnRoute" component={DriverEnRouteScreen} />
-          <Stack.Screen name="CustomerEnRoute" component={CustomerEnRouteScreen} />
-          <Stack.Screen name="LiveCharging" component={LiveChargingScreen} />
-          <Stack.Screen name="Payment" component={PaymentScreen} />
-          <Stack.Screen name="IncomingRequests" component={IncomingRequestsScreen} />
-          <Stack.Screen name="RequestDetails" component={RequestDetailsScreen} />
-          <Stack.Screen name="StartCharging" component={StartChargingScreen} />
-          <Stack.Screen name="ChargingControls" component={ChargingControlsScreen} />
-          <Stack.Screen name="BillGeneration" component={BillGenerationScreen} />
-          <Stack.Screen name="MyBookings" component={MyBookingsScreen} />
-          <Stack.Screen name="PaymentMethods" component={PaymentMethodsScreen} />
-          <Stack.Screen name="Settings" component={SettingsScreen} />
-          <Stack.Screen name="Support" component={SupportScreen} />
-          <Stack.Screen name="Chat" component={ChatScreen} />
-          
-          {/* New Operator Screens */}
-          <Stack.Screen name="DriverProfile" component={DriverProfileScreen} />
-          <Stack.Screen name="DriverPreferences" component={DriverPreferencesScreen} />
-          <Stack.Screen name="DriverJobHistory" component={DriverJobHistoryScreen} />
-          <Stack.Screen name="DriverVehicle" component={DriverVehicleScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
-      </SocketProvider>
-    </ProfileProvider>
+    <SafeAreaProvider>
+      <ProfileProvider>
+        <SocketProvider>
+          <NavigationContainer>
+            <StatusBar style="dark" backgroundColor="#FFFFFF" />
+            <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+              <Stack.Screen name="Welcome" component={WelcomeScreen} />
+              <Stack.Screen name="CustomerDashboard" component={CustomerDashboardScreen} />
+              <Stack.Screen name="BookingWizard" component={BookingWizardScreen} />
+              <Stack.Screen name="NearbyVans" component={NearbyVansScreen} />
+              <Stack.Screen name="DriverAuth" component={DriverAuthScreen} />
+              <Stack.Screen name="Waiting" component={WaitingScreen} />
+              <Stack.Screen name="DriverDashboard" component={DriverDashboardScreen} />
+              <Stack.Screen name="EnRoute" component={DriverEnRouteScreen} />
+              <Stack.Screen name="CustomerEnRoute" component={CustomerEnRouteScreen} options={{ gestureEnabled: false }} />
+              <Stack.Screen name="LiveCharging" component={LiveChargingScreen} options={{ gestureEnabled: false }} />
+              <Stack.Screen name="Payment" component={PaymentScreen} />
+              <Stack.Screen name="IncomingRequests" component={IncomingRequestsScreen} />
+              <Stack.Screen name="RequestDetails" component={RequestDetailsScreen} />
+              <Stack.Screen name="StartCharging" component={StartChargingScreen} />
+              <Stack.Screen name="ChargingControls" component={ChargingControlsScreen} />
+              <Stack.Screen name="BillGeneration" component={BillGenerationScreen} />
+              <Stack.Screen name="MyBookings" component={MyBookingsScreen} />
+              <Stack.Screen name="PaymentMethods" component={PaymentMethodsScreen} />
+              <Stack.Screen name="Settings" component={SettingsScreen} />
+              <Stack.Screen name="Support" component={SupportScreen} />
+              <Stack.Screen name="Chat" component={ChatScreen} />
+
+              {/* Operator Sub Screens */}
+              <Stack.Screen name="DriverProfile" component={DriverProfileScreen} />
+              <Stack.Screen name="DriverPreferences" component={DriverPreferencesScreen} />
+              <Stack.Screen name="DriverJobHistory" component={DriverJobHistoryScreen} />
+              <Stack.Screen name="DriverVehicle" component={DriverVehicleScreen} />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </SocketProvider>
+      </ProfileProvider>
+    </SafeAreaProvider>
   );
 }

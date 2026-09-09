@@ -1,6 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, SafeAreaView, Dimensions, Modal, ActivityIndicator, TouchableWithoutFeedback } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Dimensions,
+  Modal,
+  Platform,
+  StatusBar,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { colors } from '../../theme/colors';
 import api from '../../services/api';
@@ -8,26 +20,78 @@ import api from '../../services/api';
 const { width } = Dimensions.get('window');
 
 const CustomerDashboardScreen = ({ navigation }: any) => {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0);
   const [profileVisible, setProfileVisible] = useState(false);
   const [nearbyVans, setNearbyVans] = useState<any[]>([]);
   const [loadingVans, setLoadingVans] = useState(true);
-  const [isVideoMuted, setIsVideoMuted] = useState(true);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [currentAddress, setCurrentAddress] = useState('Locating your position...');
+  const [selectedService, setSelectedService] = useState('emergency');
+
+  const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
-    fetchNearbyVans();
+    fetchLocationAndVans();
   }, []);
 
-  const fetchNearbyVans = async () => {
+  useEffect(() => {
+    if (userLocation && mapRef.current) {
+      try {
+        mapRef.current.animateToRegion(
+          {
+            latitude: userLocation.latitude,
+            longitude: userLocation.longitude,
+            latitudeDelta: 0.03,
+            longitudeDelta: 0.03,
+          },
+          800
+        );
+      } catch (e) {}
+    }
+  }, [userLocation]);
+
+  const fetchLocationAndVans = async () => {
     try {
       setLoadingVans(true);
       let { status } = await Location.requestForegroundPermissionsAsync();
-      let lng = -122.406417; // Default fallback
+      let lng = -122.406417;
       let lat = 37.785834;
-      
+
       if (status === 'granted') {
         const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         lng = location.coords.longitude;
         lat = location.coords.latitude;
+        const newCoords = { latitude: lat, longitude: lng };
+        setUserLocation(newCoords);
+
+        if (mapRef.current) {
+          try {
+            mapRef.current.animateToRegion(
+              {
+                latitude: lat,
+                longitude: lng,
+                latitudeDelta: 0.03,
+                longitudeDelta: 0.03,
+              },
+              800
+            );
+          } catch (e) {}
+        }
+
+        try {
+          const geocode = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+          if (geocode && geocode.length > 0) {
+            const first = geocode[0];
+            const addr = [first.name || first.street, first.city].filter(Boolean).join(', ');
+            setCurrentAddress(addr || 'Current Location');
+          }
+        } catch {
+          setCurrentAddress('Current Location');
+        }
+      } else {
+        setUserLocation({ latitude: lat, longitude: lng });
+        setCurrentAddress('Current Location');
       }
 
       const response = await api.get(`/operators/nearby?lng=${lng}&lat=${lat}`);
@@ -35,527 +99,660 @@ const CustomerDashboardScreen = ({ navigation }: any) => {
         setNearbyVans(response.data.data.operators);
       }
     } catch (error) {
-      console.error('Error fetching nearby vans:', error);
+      console.error('Error fetching data:', error);
+      setUserLocation({ latitude: 37.785834, longitude: -122.406417 });
+      setCurrentAddress('Current Location');
     } finally {
       setLoadingVans(false);
     }
   };
 
+  const recenterMap = () => {
+    if (mapRef.current && userLocation) {
+      try {
+        mapRef.current.animateToRegion(
+          {
+            latitude: userLocation.latitude,
+            longitude: userLocation.longitude,
+            latitudeDelta: 0.03,
+            longitudeDelta: 0.03,
+          },
+          600
+        );
+      } catch (e) {}
+    }
+  };
+
+  const handleBookNow = () => {
+    navigation.navigate('BookingWizard', { serviceType: selectedService });
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={{ backgroundColor: 'rgba(47,248,1,0.1)', padding: 6, borderRadius: 8, marginRight: 8, borderWidth: 1, borderColor: colors.secondaryContainer }}>
-            <Text style={{ fontSize: 14 }}>⚡</Text>
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
+      {/* Main Map Background */}
+      <View style={styles.mapContainer}>
+        <MapView
+          ref={mapRef}
+          provider={PROVIDER_DEFAULT}
+          style={styles.map}
+          initialRegion={{
+            latitude: 37.785834,
+            longitude: -122.406417,
+            latitudeDelta: 0.04,
+            longitudeDelta: 0.04,
+          }}
+          showsUserLocation={true}
+          showsMyLocationButton={false}
+          showsCompass={false}
+        >
+          {userLocation && (
+            <Marker coordinate={userLocation} title="Your Location">
+              <View style={styles.userMarkerPin}>
+                <View style={styles.userMarkerRing} />
+                <View style={styles.userMarkerCore} />
+              </View>
+            </Marker>
+          )}
+
+          {nearbyVans.map((van, index) => {
+            const lat =
+              van.location?.coordinates?.[1] ||
+              (userLocation?.latitude || 37.785834) + (index * 0.005 - 0.003);
+            const lng =
+              van.location?.coordinates?.[0] ||
+              (userLocation?.longitude || -122.406417) + (index * 0.005 - 0.003);
+
+            return (
+              <Marker key={van._id || index} coordinate={{ latitude: lat, longitude: lng }}>
+                <View style={styles.vanMarker}>
+                  <Ionicons name="flash" size={14} color="#FFFFFF" />
+                </View>
+              </Marker>
+            );
+          })}
+        </MapView>
+
+        {/* Floating Top App Bar with Accurate Inset */}
+        <View style={[styles.floatingHeaderArea, { paddingTop: topInset + 10 }]}>
+          <View style={styles.topBar}>
+            <View style={styles.brandPill}>
+              <View style={styles.brandIcon}>
+                <Ionicons name="flash" size={14} color="#FFFFFF" />
+              </View>
+              <Text style={styles.brandName}>VoltRescue</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.locationPill}
+              onPress={fetchLocationAndVans}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="location-sharp" size={16} color={colors.primary} />
+              <Text style={styles.locationText} numberOfLines={1}>
+                {currentAddress}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.avatarButton}
+              onPress={() => setProfileVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="menu" size={20} color="#0F172A" />
+            </TouchableOpacity>
           </View>
-          <Text style={styles.headerTitle}>VOLT RESCUE</Text>
         </View>
-        <TouchableOpacity style={styles.profileBox} onPress={() => setProfileVisible(true)}>
-          <Text style={styles.profileIcon}>👤</Text>
-        </TouchableOpacity>
+
+        {/* Floating Map Recenter Control */}
+        <View style={[styles.mapControls, { top: topInset + 72 }]}>
+          <TouchableOpacity style={styles.mapControlBtn} onPress={recenterMap} activeOpacity={0.8}>
+            <Ionicons name="locate" size={20} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
+      {/* Menu / Profile Drawer Modal */}
       <Modal visible={profileVisible} transparent animationType="fade">
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setProfileVisible(false)}>
-          <View style={styles.profileModalContent}>
-            <Text style={styles.modalTitle}>Menu</Text>
-            <TouchableOpacity style={styles.modalItem} onPress={() => { setProfileVisible(false); navigation.navigate('MyBookings'); }}><Text style={styles.modalItemText}>My Bookings</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.modalItem} onPress={() => { setProfileVisible(false); navigation.navigate('PaymentMethods'); }}><Text style={styles.modalItemText}>Payment Methods</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.modalItem} onPress={() => { setProfileVisible(false); navigation.navigate('Settings'); }}><Text style={styles.modalItemText}>Settings</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.modalItem} onPress={() => { setProfileVisible(false); navigation.navigate('Support'); }}><Text style={styles.modalItemText}>Support & Help</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.modalItem} onPress={() => { setProfileVisible(false); navigation.replace('Welcome'); }}><Text style={styles.modalItemText}>Back to Welcome</Text></TouchableOpacity>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setProfileVisible(false)}
+        >
+          <View style={[styles.drawerContent, { paddingTop: topInset + 16 }]}>
+            <View style={styles.drawerHeader}>
+              <View style={styles.userProfileRow}>
+                <View style={styles.userAvatar}>
+                  <Ionicons name="person" size={24} color="#059669" />
+                </View>
+                <View>
+                  <Text style={styles.userName}>EV Guest Driver</Text>
+                  <Text style={styles.userSub}>Instant Roadside Rescue</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setProfileVisible(false)} style={styles.closeDrawerBtn}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.drawerDivider} />
+
+            <TouchableOpacity
+              style={styles.drawerItem}
+              onPress={() => {
+                setProfileVisible(false);
+                navigation.navigate('MyBookings');
+              }}
+            >
+              <Ionicons name="time-outline" size={20} color="#64748B" />
+              <Text style={styles.drawerItemText}>My Rescue Trips</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.drawerItem}
+              onPress={() => {
+                setProfileVisible(false);
+                navigation.navigate('PaymentMethods');
+              }}
+            >
+              <Ionicons name="card-outline" size={20} color="#64748B" />
+              <Text style={styles.drawerItemText}>Payment Methods</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.drawerItem}
+              onPress={() => {
+                setProfileVisible(false);
+                navigation.navigate('Settings');
+              }}
+            >
+              <Ionicons name="settings-outline" size={20} color="#64748B" />
+              <Text style={styles.drawerItemText}>App Settings</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.drawerItem}
+              onPress={() => {
+                setProfileVisible(false);
+                navigation.navigate('Support');
+              }}
+            >
+              <Ionicons name="help-buoy-outline" size={20} color="#64748B" />
+              <Text style={styles.drawerItemText}>Help & Support</Text>
+            </TouchableOpacity>
+
+            <View style={styles.drawerDivider} />
+
+            <TouchableOpacity
+              style={[styles.drawerItem, styles.driverPortalItem]}
+              onPress={() => {
+                setProfileVisible(false);
+                navigation.navigate('DriverAuth');
+              }}
+            >
+              <Ionicons name="car-sport" size={20} color="#059669" />
+              <Text style={styles.driverPortalText}>Rescue Driver Portal</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.drawerItem}
+              onPress={() => {
+                setProfileVisible(false);
+                navigation.replace('Welcome');
+              }}
+            >
+              <Ionicons name="log-out-outline" size={20} color="#DC2626" />
+              <Text style={[styles.drawerItemText, { color: '#DC2626' }]}>Exit to Welcome</Text>
+            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Hero / Emergency Banner */}
-        <View style={styles.heroCard}>
-          <Image
-            source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCtEZTrUDcljv0zCFvMkdksLchO5RUYzfKGpNG2GsmLWdBE_h4hc5Fl5Uj8vuYmd6NiKeL3lmwtJqjJfW5ksylJTfpS_Xpz6fdYpbJ-zyMPqCPS7ERcBkqvN9imGPezfbOGdQq9rGYDEuu-DqQAGXRpfwT0XleqfzZotpCaJJcQ_2L4o-6y71r5GrgIIwZeD8y8j5ojHxixZ9ywII3EHxRZ9fJv0-kY5VQ_OEadmGLfwFSzj_PB0nNWmeobr0Bc__1cb2TFcIVgBHqJ' }}
-            style={styles.heroImage}
-          />
-          <View style={styles.heroOverlay}>
-            <View style={styles.emergencyBadge}>
-              <Text style={styles.emergencyBadgeText}>EMERGENCY RESPONSE ACTIVE</Text>
-            </View>
-            <Text style={styles.heroTitle}>Stranded? We'll bring the charge to you.</Text>
-            <Text style={styles.heroSubtitle}>24/7 Mobile rapid charging dispatched in minutes.</Text>
+      {/* Bottom Sheet Card */}
+      <View style={[styles.bottomSheet, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+        <View style={styles.dragHandle} />
 
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={() => navigation.navigate('BookingWizard')}
+        {/* Dispatch Availability Banner */}
+        <View style={styles.dispatchBanner}>
+          <View style={styles.dispatchInfo}>
+            <View style={styles.pulseDot} />
+            <Text style={styles.dispatchTitle}>
+              {nearbyVans.length > 0 ? `${nearbyVans.length} Mobile Vans Online` : 'Rapid Response Active'}
+            </Text>
+          </View>
+          <View style={styles.etaBadge}>
+            <Ionicons name="time-outline" size={13} color="#059669" />
+            <Text style={styles.etaBadgeText}>~8 min arrival</Text>
+          </View>
+        </View>
+
+        {/* Service Options */}
+        <View style={styles.servicesGrid}>
+          <TouchableOpacity
+            style={[styles.serviceCard, selectedService === 'emergency' && styles.serviceCardSelected]}
+            onPress={() => setSelectedService('emergency')}
+            activeOpacity={0.8}
+          >
+            <View
+              style={[
+                styles.serviceIconCircle,
+                selectedService === 'emergency' && styles.serviceIconCircleSelected,
+              ]}
             >
-              <Text style={styles.primaryButtonText}>Book Charging Now</Text>
-              <Text style={styles.primaryButtonIcon}>⚡</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+              <Ionicons
+                name="flash"
+                size={18}
+                color={selectedService === 'emergency' ? '#FFFFFF' : '#059669'}
+              />
+            </View>
+            <Text style={styles.serviceName}>Emergency Boost</Text>
+            <Text style={styles.serviceDesc}>Quick 15–20 kWh charge</Text>
+            <Text style={styles.servicePrice}>Fast Dispatch</Text>
+          </TouchableOpacity>
 
-        {/* Nearby Stations / Vans */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Nearby Rescue Vans</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('NearbyVans')}>
-              <Text style={styles.sectionLink}>See all</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-            {loadingVans ? (
-              <View style={{ width: width - 40, alignItems: 'center', padding: 20 }}>
-                <ActivityIndicator color={colors.secondaryContainer} />
-              </View>
-            ) : nearbyVans.length === 0 ? (
-              <View style={{ width: width - 40, alignItems: 'center', padding: 20 }}>
-                <Text style={{ color: colors.onSurfaceVariant }}>No rescue vans nearby</Text>
-              </View>
-            ) : (
-              nearbyVans.map((van, index) => {
-                const distance = van.dist?.calculated ? (van.dist.calculated / 1609.34).toFixed(1) : (Math.random() * 5 + 0.5).toFixed(1);
-                
-                return (
-                  <View key={van._id || index} style={styles.vanCard}>
-                    <View style={styles.vanIconBg}>
-                      <Text style={styles.vanIcon}>🚚</Text>
-                    </View>
-                    <View>
-                      <Text style={styles.vanName}>{van.name || `Van #${van._id.substring(0,4)}`}</Text>
-                      <Text style={styles.vanDistance}>{distance} miles away</Text>
-                    </View>
-                    <View style={styles.liveBadge}>
-                      <View style={styles.liveDot} />
-                      <Text style={styles.liveText}>{van.status === 'ONLINE' ? 'LIVE' : van.status}</Text>
-                    </View>
-                  </View>
-                );
-              })
-            )}
-          </ScrollView>
-        </View>
-
-        {/* How It Works */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>How It Works</Text>
-          <View style={styles.stepsGrid}>
-            <View style={styles.stepBox}>
-              <Text style={styles.stepIcon}>📍</Text>
-              <Text style={styles.stepTitle}>1. Request</Text>
-              <Text style={styles.stepDesc}>Pin your location and request a charge.</Text>
+          <TouchableOpacity
+            style={[styles.serviceCard, selectedService === 'full' && styles.serviceCardSelected]}
+            onPress={() => setSelectedService('full')}
+            activeOpacity={0.8}
+          >
+            <View
+              style={[
+                styles.serviceIconCircle,
+                selectedService === 'full' && styles.serviceIconCircleSelected,
+              ]}
+            >
+              <Ionicons
+                name="battery-charging"
+                size={18}
+                color={selectedService === 'full' ? '#FFFFFF' : '#059669'}
+              />
             </View>
-            <View style={styles.stepBox}>
-              <Text style={styles.stepIcon}>🚚</Text>
-              <Text style={styles.stepTitle}>2. We Arrive</Text>
-              <Text style={styles.stepDesc}>A mobile unit arrives at your location.</Text>
-            </View>
-            <View style={styles.stepBox}>
-              <Text style={styles.stepIcon}>🔋</Text>
-              <Text style={styles.stepTitle}>3. Charge</Text>
-              <Text style={styles.stepDesc}>We rapidly charge your EV.</Text>
-            </View>
-            <View style={styles.stepBox}>
-              <Text style={styles.stepIcon}>🛣️</Text>
-              <Text style={styles.stepTitle}>4. Drive</Text>
-              <Text style={styles.stepDesc}>Pay seamlessly and get back on the road.</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Watch It In Action Video */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Watch It In Action</Text>
-          <View style={styles.videoCard}>
-            <TouchableWithoutFeedback onPress={() => setIsVideoMuted(!isVideoMuted)}>
-              <View style={{ width: '100%', height: '100%' }}>
-                <Video
-                  source={require('../../../assets/video/VID-20260717-WA0002.mp4')}
-                  style={styles.videoPlayer}
-                  resizeMode={ResizeMode.COVER}
-                  isMuted={isVideoMuted}
-                  shouldPlay
-                  isLooping
-                />
-                {!isVideoMuted && (
-                  <View style={styles.muteButton}>
-                    <Text style={styles.muteButtonText}>🔊</Text>
-                  </View>
-                )}
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </View>
-
-        {/* Service Info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Service Information</Text>
-          <View style={styles.infoCard}>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoIcon}>🔌</Text>
-              <View style={styles.infoTextContainer}>
-                <Text style={styles.infoTitle}>Universal Compatibility</Text>
-                <Text style={styles.infoDesc}>We support CCS1, CCS2, CHAdeMO, and Tesla (NACS) connectors.</Text>
-              </View>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.infoRow}>
-              <Text style={styles.infoIcon}>⏱️</Text>
-              <View style={styles.infoTextContainer}>
-                <Text style={styles.infoTitle}>Ultra-Fast Speeds</Text>
-                <Text style={styles.infoDesc}>Our mobile units deliver up to 150kW DC fast charging.</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Support & FAQs */}
-        <View style={styles.section}>
-          <TouchableOpacity style={styles.supportButton} onPress={() => navigation.navigate('Support')}>
-            <Text style={styles.supportIcon}>❓</Text>
-            <Text style={styles.supportText}>FAQs & Support</Text>
-            <Text style={styles.supportArrow}>→</Text>
+            <Text style={styles.serviceName}>Full Recovery</Text>
+            <Text style={styles.serviceDesc}>30–50 kWh top-up</Text>
+            <Text style={styles.servicePrice}>Standard Dispatch</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </SafeAreaView>
+
+        {/* Primary Action Button */}
+        <TouchableOpacity
+          style={styles.primaryActionButton}
+          onPress={() => navigation.navigate('BookingWizard')}
+          activeOpacity={0.88}
+        >
+          <View style={styles.btnRow}>
+            <Ionicons name="flash" size={18} color="#FFFFFF" />
+            <Text style={styles.primaryActionText}>REQUEST RESCUE CHARGE</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF',
   },
-  header: {
+  mapContainer: {
+    flex: 1,
+  },
+  map: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  vanMarker: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#059669',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  userMarkerPin: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 28,
+    height: 28,
+  },
+  userMarkerRing: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(5, 150, 105, 0.25)',
+  },
+  userMarkerCore: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#059669',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  floatingHeaderArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  brandPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  brandIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#059669',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  brandName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  locationPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 6,
+  },
+  locationText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F172A',
+    flex: 1,
+  },
+  avatarButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  mapControls: {
+    position: 'absolute',
+    right: 16,
+    zIndex: 10,
+  },
+  mapControlBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-start',
+  },
+  drawerContent: {
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  drawerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    paddingTop: 50,
-    backgroundColor: 'rgba(19, 19, 19, 0.95)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    marginBottom: 12,
   },
-  headerLeft: {
+  userProfileRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  menuButton: {
-    padding: 4,
+  userAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
-  menuIcon: {
-    color: colors.primary,
-    fontSize: 24,
+  userName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
   },
-  headerTitle: {
-    color: colors.primary,
-    fontSize: 18,
-    fontWeight: 'bold',
-    letterSpacing: 1,
+  userSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
   },
-  profileBox: {
+  closeDrawerBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.surfaceContainerHigh,
-    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
   },
-  profileIcon: {
-    fontSize: 16,
+  drawerDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 10,
   },
-  scrollContent: {
-    paddingBottom: 40,
+  drawerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 14,
   },
-  heroCard: {
-    width: '100%',
-    height: 400,
-    position: 'relative',
+  drawerItemText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0F172A',
   },
-  heroImage: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    padding: 24,
-    justifyContent: 'flex-end',
-    alignItems: 'flex-start',
-  },
-  emergencyBadge: {
-    backgroundColor: 'rgba(255,180,171,0.2)',
+  driverPortalItem: {
+    backgroundColor: '#ECFDF5',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 12,
+    marginVertical: 4,
+  },
+  driverPortalText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  bottomSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,180,171,0.5)',
-    marginBottom: 16,
+    borderColor: '#E2E8F0',
   },
-  emergencyBadgeText: {
-    color: colors.error,
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 1,
+  dragHandle: {
+    width: 36,
+    height: 4,
+    backgroundColor: '#CBD5E1',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 12,
   },
-  heroTitle: {
-    color: colors.onSurface,
-    fontSize: 32,
-    fontWeight: 'bold',
-    lineHeight: 40,
-    marginBottom: 8,
+  dispatchBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
-  heroSubtitle: {
-    color: colors.onSurfaceVariant,
-    fontSize: 16,
-    marginBottom: 32,
-  },
-  primaryButton: {
-    backgroundColor: colors.secondaryFixed,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 30,
+  dispatchInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    width: '100%',
-    justifyContent: 'center',
-    shadowColor: colors.secondaryFixed,
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
   },
-  primaryButtonText: {
-    color: colors.onSecondaryFixed,
-    fontSize: 18,
-    fontWeight: 'bold',
+  pulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#059669',
   },
-  primaryButtonIcon: {
-    fontSize: 18,
-  },
-  section: {
-    padding: 24,
-    paddingBottom: 0,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    color: colors.onSurface,
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  sectionLink: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  horizontalScroll: {
-    gap: 16,
-  },
-  vanCard: {
-    backgroundColor: colors.surfaceContainerLow,
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-    width: width * 0.75,
-  },
-  vanIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(121,255,91,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  vanIcon: {
-    fontSize: 24,
-  },
-  vanName: {
-    color: colors.onSurface,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  vanDistance: {
-    color: colors.onSurfaceVariant,
+  dispatchTitle: {
     fontSize: 12,
-    marginTop: 4,
+    fontWeight: '700',
+    color: '#065F46',
   },
-  liveBadge: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
+  etaBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
   },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.error,
+  etaBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
   },
-  liveText: {
-    color: colors.onSurface,
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  stepsGrid: {
+  servicesGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
+    gap: 10,
+    marginBottom: 14,
   },
-  stepBox: {
-    width: (width - 64) / 2,
-    backgroundColor: colors.surfaceContainerLow,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-  },
-  stepIcon: {
-    fontSize: 24,
-    marginBottom: 12,
-  },
-  stepTitle: {
-    color: colors.onSurface,
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  stepDesc: {
-    color: colors.onSurfaceVariant,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  infoCard: {
-    backgroundColor: colors.surfaceContainerLow,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-    padding: 20,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  infoIcon: {
-    fontSize: 24,
-  },
-  infoTextContainer: {
+  serviceCard: {
     flex: 1,
-  },
-  infoTitle: {
-    color: colors.onSurface,
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  infoDesc: {
-    color: colors.onSurfaceVariant,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    marginVertical: 16,
-  },
-  supportButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceContainerHigh,
-    padding: 20,
+    backgroundColor: '#F8FAFC',
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
   },
-  supportIcon: {
-    fontSize: 20,
-    marginRight: 16,
+  serviceCardSelected: {
+    borderColor: '#059669',
+    backgroundColor: '#ECFDF5',
   },
-  supportText: {
-    flex: 1,
-  },
-  supportArrow: {
-    color: colors.secondaryContainer,
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  statValue: { color: colors.secondaryContainer, fontSize: 16, fontWeight: 'bold' },
-  statLabel: { color: colors.onSurfaceVariant, fontSize: 12 },
-  videoCard: {
-    width: '100%',
-    height: 200,
-    backgroundColor: '#000',
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-  },
-  videoPlayer: {
-    width: '100%',
-    height: '100%',
-  },
-  muteButton: {
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
+  serviceIconCircle: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: '#E2E8F0',
   },
-  muteButtonText: {
-    fontSize: 18,
+  serviceIconCircleSelected: {
+    backgroundColor: '#059669',
+    borderColor: '#059669',
   },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'flex-start',
+  serviceName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 2,
   },
-  menuModalContent: {
-    backgroundColor: '#1E1E1E',
-    width: 250,
-    marginTop: 60,
-    marginLeft: 16,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#333'
+  serviceDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 6,
   },
-  profileModalContent: {
-    backgroundColor: '#1E1E1E',
-    width: 200,
-    marginTop: 60,
-    alignSelf: 'flex-end',
-    marginRight: 16,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#333'
+  servicePrice: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
   },
-  modalTitle: { color: colors.secondaryContainer, fontSize: 16, fontWeight: 'bold', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#333', paddingBottom: 8 },
-  modalItem: { paddingVertical: 12 },
-  modalItemText: { color: '#fff', fontSize: 14 }
+  primaryActionButton: {
+    backgroundColor: '#059669',
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  btnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  primaryActionText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
 });
 
 export default CustomerDashboardScreen;

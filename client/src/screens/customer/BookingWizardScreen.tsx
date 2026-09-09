@@ -1,102 +1,139 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, TextInput, KeyboardAvoidingView, Platform, StatusBar } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  ScrollView,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  StatusBar,
+  Modal,
+  FlatList,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../theme/colors';
 import api from '../../services/api';
 import * as Location from 'expo-location';
 
-const BookingWizardScreen = ({ navigation }: any) => {
-  const [step, setStep] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
+const VEHICLE_MODELS = [
+  'Tata Nexon EV',
+  'Tata Punch EV / Tiago EV',
+  'MG ZS EV / Windsor EV',
+  'Mahindra XUV400',
+  'Hyundai Ioniq 5 / Creta EV',
+  'BYD Atto 3 / Seal',
+  'Kia EV6',
+  'BMW / Mercedes-Benz EV',
+  'Other 4-Wheeler EV',
+];
 
+const CONNECTOR_TYPES = [
+  { id: 'CCS2', name: 'CCS2 (Combined Charging System - DC Fast)', icon: 'flash' },
+  { id: 'Type 2', name: 'Type 2 (Mennekes Standard)', icon: 'hardware-chip' },
+  { id: 'GB/T', name: 'GB/T (Indian Standard)', icon: 'git-network' },
+  { id: 'CHAdeMO', name: 'CHAdeMO (Fast DC)', icon: 'battery-charging' },
+];
+
+const BookingWizardScreen = ({ navigation }: any) => {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0) + 6;
+  const [isLoading, setIsLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<any>(null);
 
-  // Form Data
+  // Required Form Fields
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [isPhoneVerified, setIsPhoneVerified] = useState(false);
-  const [showOtpInput, setShowOtpInput] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [timeSlot, setTimeSlot] = useState({ start: '10:00', end: '11:00' });
   const [address, setAddress] = useState('');
-  const [addressDetails, setAddressDetails] = useState('');
+  const [vehicleModel, setVehicleModel] = useState('Tata Nexon EV');
   const [connectorType, setConnectorType] = useState('CCS2');
-  const [chargingType, setChargingType] = useState('Fast');
-  const [batteryPercentage, setBatteryPercentage] = useState('20');
-  const [requestedEnergyKWh, setRequestedEnergyKWh] = useState('30');
-  const [paymentMethod, setPaymentMethod] = useState('Online');
+  const [remarks, setRemarks] = useState('');
+
+  // Dropdown Modal Visibility
+  const [isVehicleModalVisible, setIsVehicleModalVisible] = useState(false);
+  const [isConnectorModalVisible, setIsConnectorModalVisible] = useState(false);
+  const [isFetchingLocation, setIsFetchingLocation] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setUserLocation({ longitude: -122.4194, latitude: 37.7749 });
-        return;
-      }
-      let location = await Location.getCurrentPositionAsync({});
-      setUserLocation({ longitude: location.coords.longitude, latitude: location.coords.latitude });
-    })();
+    fetchLiveLocation();
   }, []);
-
-  const [isFetchingLocation, setIsFetchingLocation] = useState(false);
 
   const fetchLiveLocation = async () => {
     setIsFetchingLocation(true);
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        alert('Permission to access location was denied');
+        setUserLocation({ longitude: -122.4194, latitude: 37.7749 });
+        setAddress('Current GPS Location');
         return;
       }
-      let location = await Location.getCurrentPositionAsync({});
-      setUserLocation({ longitude: location.coords.longitude, latitude: location.coords.latitude });
+      let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const coords = { longitude: location.coords.longitude, latitude: location.coords.latitude };
+      setUserLocation(coords);
 
-      let geocode = await Location.reverseGeocodeAsync({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude
-      });
+      try {
+        let geocode = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
 
-      if (geocode && geocode.length > 0) {
-        const addr = geocode[0];
-        const formattedAddress = `${addr.name ? addr.name + ', ' : ''}${addr.street ? addr.street + ', ' : ''}${addr.city ? addr.city : ''}`;
-        setAddress(formattedAddress);
+        if (geocode && geocode.length > 0) {
+          const addr = geocode[0];
+          const formattedAddress = [addr.name || addr.street, addr.city, addr.region]
+            .filter(Boolean)
+            .join(', ');
+          setAddress(formattedAddress || 'Current GPS Location');
+        } else {
+          setAddress('Current GPS Location');
+        }
+      } catch {
+        setAddress('Current GPS Location');
       }
     } catch (error) {
-      console.error(error);
-      alert('Failed to fetch location');
+      console.error('Error fetching GPS:', error);
+      setUserLocation({ longitude: -122.4194, latitude: 37.7749 });
+      setAddress('Current GPS Location');
     } finally {
       setIsFetchingLocation(false);
     }
   };
 
-  const handleNext = () => setStep(prev => prev + 1);
-  const handleBack = () => setStep(prev => prev - 1);
+  const handleRequestRescue = async () => {
+    if (!name.trim()) {
+      alert('Please enter your name.');
+      return;
+    }
+    if (!phone.trim() || phone.trim().length < 8) {
+      alert('Please enter a valid mobile phone number.');
+      return;
+    }
 
-  const handleRequestCharge = async () => {
     setIsLoading(true);
     try {
       const coords = userLocation ? [userLocation.longitude, userLocation.latitude] : [-122.4194, 37.7749];
 
       const payload = {
-        date,
-        timeSlot,
+        date: new Date().toISOString().split('T')[0],
+        timeSlot: { start: 'NOW', end: 'IMMEDIATE' },
         userLocation: {
           coordinates: coords,
-          address: address ? `${address}${addressDetails ? ', ' + addressDetails : ''}` : "Current Location",
+          address: address.trim() || 'Current Roadside Location',
         },
-        personalInfo: { name, phone },
-        connectorType,
-        chargingType,
-        batteryPercentage: {
-          current: parseInt(batteryPercentage) || 20,
-          target: 100
+        personalInfo: {
+          name: name.trim(),
+          phone: phone.trim(),
         },
-        requestedEnergyKWh: parseInt(requestedEnergyKWh) || 30,
-        estimatedDuration: 45,
-        travelDistance: 5, // mock distance
-        paymentMethod
+        vehicleModel: vehicleModel,
+        connectorType: connectorType,
+        chargingType: 'DC Fast',
+        remarks: remarks.trim() || undefined,
+        batteryPercentage: { current: 10, target: 100 },
+        requestedEnergyKWh: 25,
+        estimatedDuration: 30,
+        travelDistance: 4.5,
+        paymentMethod: 'Cash', // Default placeholder; settled post-charge
       };
 
       const response = await api.post('/bookings', payload);
@@ -105,535 +142,642 @@ const BookingWizardScreen = ({ navigation }: any) => {
       navigation.navigate('Waiting', { bookingId: booking._id });
     } catch (error) {
       console.error('Error creating booking:', error);
-      alert('Failed to create booking. Please try again.');
+      alert('Failed to submit rescue request. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const StepIndicator = () => (
-    <View style={styles.progressContainer}>
-      {[1, 2, 3].map((item, index) => (
-        <React.Fragment key={item}>
-          <View style={[styles.stepCircle, step >= item && styles.stepCircleActive]}>
-            {step > item ? (
-              <Ionicons name="checkmark" size={16} color={colors.secondaryContainer} />
-            ) : (
-              <Text style={[styles.stepNumber, step >= item && styles.stepNumberActive]}>{item}</Text>
-            )}
-          </View>
-          {index < 2 && (
-            <View style={[styles.progressLine, step > item && styles.progressLineActive]} />
-          )}
-        </React.Fragment>
-      ))}
-    </View>
-  );
-
-  const renderStep1 = () => (
-    <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Personal Info & Vehicle</Text>
-      <Text style={styles.stepSubtitle}>Provide your details and vehicle requirements</Text>
-
-      <View style={styles.card}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>FULL NAME</Text>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="person-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              value={name}
-              onChangeText={setName}
-              placeholder="e.g. Jane Doe"
-              placeholderTextColor={colors.onSurfaceVariant}
-            />
-          </View>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>PHONE NUMBER</Text>
-          <View style={styles.phoneRow}>
-            <View style={[styles.inputWrapper, { flex: 1 }]}>
-              <Ionicons name="call-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                value={phone}
-                onChangeText={(text) => {
-                  setPhone(text);
-                  setIsPhoneVerified(false);
-                  setShowOtpInput(false);
-                }}
-                keyboardType="phone-pad"
-                placeholder="10-digit number"
-                placeholderTextColor={colors.onSurfaceVariant}
-                editable={!isPhoneVerified}
-              />
-            </View>
-            {!isPhoneVerified && !showOtpInput && (
-              <TouchableOpacity
-                style={styles.verifyBtn}
-                onPress={() => {
-                  if (phone.length >= 10) setShowOtpInput(true);
-                  else alert('Enter a valid phone number');
-                }}
-              >
-                <Text style={styles.verifyBtnText}>VERIFY</Text>
-              </TouchableOpacity>
-            )}
-            {isPhoneVerified && (
-              <View style={styles.verifiedBadge}>
-                <Ionicons name="checkmark-circle" size={16} color={colors.secondaryContainer} />
-                <Text style={styles.verifiedText}>VERIFIED</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {showOtpInput && !isPhoneVerified && (
-          <View style={[styles.inputGroup, styles.otpContainer]}>
-            <Text style={styles.label}>ENTER OTP (USE 1234)</Text>
-            <View style={styles.phoneRow}>
-              <View style={[styles.inputWrapper, { flex: 1 }]}>
-                <Ionicons name="key-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  value={otpCode}
-                  onChangeText={setOtpCode}
-                  keyboardType="number-pad"
-                  placeholder="Enter OTP"
-                  placeholderTextColor={colors.onSurfaceVariant}
-                />
-              </View>
-              <TouchableOpacity
-                style={styles.verifyBtn}
-                onPress={() => {
-                  if (otpCode === '1234') {
-                    setIsPhoneVerified(true);
-                    setShowOtpInput(false);
-                  } else {
-                    alert('Invalid OTP');
-                  }
-                }}
-              >
-                <Text style={styles.verifyBtnText}>SUBMIT</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.label}>CONNECTOR TYPE</Text>
-        <View style={styles.chipRow}>
-          {['CCS2', 'CHAdeMO', 'Type2'].map(type => (
-            <TouchableOpacity
-              key={type}
-              style={[styles.chip, connectorType === type && styles.chipActive]}
-              onPress={() => setConnectorType(type)}
-            >
-              <Text style={[styles.chipText, connectorType === type && styles.chipTextActive]}>{type}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={[styles.label, { marginTop: 24 }]}>CHARGING TYPE</Text>
-        <View style={styles.chipRow}>
-          {['Fast', 'Slow'].map(type => (
-            <TouchableOpacity
-              key={type}
-              style={[styles.chip, chargingType === type && styles.chipActive]}
-              onPress={() => setChargingType(type)}
-            >
-              <Text style={[styles.chipText, chargingType === type && styles.chipTextActive]}>{type}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <View style={[styles.row, { marginTop: 24 }]}>
-          <View style={[styles.inputGroup, { flex: 1, marginBottom: 0 }]}>
-            <Text style={styles.label}>CURRENT BATTERY %</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="battery-half-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                value={batteryPercentage}
-                onChangeText={setBatteryPercentage}
-                keyboardType="numeric"
-                placeholder="20"
-                placeholderTextColor={colors.onSurfaceVariant}
-              />
-            </View>
-          </View>
-
-          <View style={{ width: 16 }} />
-
-          <View style={[styles.inputGroup, { flex: 1, marginBottom: 0 }]}>
-            <Text style={styles.label}>NEEDED (kWh)</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="flash-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                value={requestedEnergyKWh}
-                onChangeText={setRequestedEnergyKWh}
-                keyboardType="numeric"
-                placeholder="30"
-                placeholderTextColor={colors.onSurfaceVariant}
-              />
-            </View>
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-
-  const renderStep2 = () => (
-    <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Location</Text>
-      <Text style={styles.stepSubtitle}>Where do you need the charge?</Text>
-      
-      <View style={styles.card}>
-        <TouchableOpacity 
-          style={[styles.verifyBtn, { marginBottom: 20, backgroundColor: '#242424', borderColor: '#333' }]}
-          onPress={fetchLiveLocation}
-          disabled={isFetchingLocation}
-        >
-          {isFetchingLocation ? (
-            <ActivityIndicator color={colors.secondaryContainer} />
-          ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="location-sharp" size={18} color="#fff" style={{ marginRight: 8 }} />
-              <Text style={[styles.verifyBtnText, { color: '#fff', fontSize: 14 }]}>
-                FETCH LIVE LOCATION
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>LOCATION ADDRESS</Text>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="map-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
-            <TextInput 
-              style={styles.input} 
-              value={address} 
-              onChangeText={setAddress} 
-              placeholder="Search or enter address"
-              placeholderTextColor={colors.onSurfaceVariant}
-              multiline={true}
-            />
-          </View>
-        </View>
-
-        <View style={[styles.inputGroup, { marginBottom: 0 }]}>
-          <Text style={styles.label}>SPECIFIC DETAILS (OPTIONAL)</Text>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="business-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
-            <TextInput 
-              style={styles.input} 
-              value={addressDetails} 
-              onChangeText={setAddressDetails} 
-              placeholder="Landmark, parking spot no."
-              placeholderTextColor={colors.onSurfaceVariant}
-            />
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-
-  const renderStep3 = () => {
-    // Mock calculate price for display
-    const baseFare = 50;
-    const energyCost = parseInt(requestedEnergyKWh || '0') * (chargingType === 'Fast' ? 25 : 15);
-    const connectorFee = connectorType === 'CCS2' ? 20 : (connectorType === 'CHAdeMO' ? 15 : 0);
-    const serviceCharge = 30 + connectorFee;
-    const travelCharge = 5 * 10;
-    const subTotal = baseFare + energyCost + serviceCharge + travelCharge;
-    const tax = subTotal * 0.18;
-    const total = subTotal + tax;
-
-    return (
-      <View style={styles.stepContainer}>
-        <Text style={styles.stepTitle}>Price & Payment</Text>
-        <Text style={styles.stepSubtitle}>Review your booking details</Text>
-
-        <View style={styles.card}>
-          <View style={styles.receiptHeader}>
-            <Ionicons name="receipt-outline" size={24} color={colors.secondaryContainer} />
-            <Text style={styles.receiptTitle}>Order Summary</Text>
-          </View>
-
-          <View style={styles.receipt}>
-            <View style={styles.receiptRow}><Text style={styles.receiptLabel}>Base Fare</Text><Text style={styles.receiptValue}>₹{baseFare}</Text></View>
-            <View style={styles.receiptRow}><Text style={styles.receiptLabel}>Energy Cost</Text><Text style={styles.receiptValue}>₹{energyCost}</Text></View>
-            <View style={styles.receiptRow}><Text style={styles.receiptLabel}>Travel Charge</Text><Text style={styles.receiptValue}>₹{travelCharge}</Text></View>
-            <View style={styles.receiptRow}><Text style={styles.receiptLabel}>Service & Connector</Text><Text style={styles.receiptValue}>₹{serviceCharge}</Text></View>
-            <View style={[styles.receiptRow, styles.divider]}><Text style={styles.receiptLabel}>Tax (18%)</Text><Text style={styles.receiptValue}>₹{tax.toFixed(2)}</Text></View>
-            <View style={[styles.receiptRow, { marginTop: 12 }]}><Text style={styles.receiptTotalLabel}>Total</Text><Text style={styles.receiptTotalValue}>₹{total.toFixed(2)}</Text></View>
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.label}>PAYMENT METHOD</Text>
-          <View style={styles.chipRow}>
-            {['Online', 'Cash', 'UPI'].map(type => (
-              <TouchableOpacity
-                key={type}
-                style={[styles.chip, paymentMethod === type && styles.chipActive]}
-                onPress={() => setPaymentMethod(type)}
-              >
-                <Ionicons 
-                  name={type === 'Cash' ? 'cash-outline' : type === 'UPI' ? 'phone-portrait-outline' : 'card-outline'} 
-                  size={18} 
-                  color={paymentMethod === type ? colors.secondaryContainer : colors.onSurfaceVariant} 
-                  style={{ marginRight: 6 }} 
-                />
-                <Text style={[styles.chipText, paymentMethod === type && styles.chipTextActive]}>{type}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </View>
-    );
-  };
-
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={[styles.container, { paddingTop: topInset }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={22} color="#0F172A" />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Emergency Rescue Request</Text>
+          <Text style={styles.headerSub}>Instant Mobile Charging Dispatch</Text>
+        </View>
+        <View style={{ width: 40 }} />
+      </View>
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => step > 1 ? handleBack() : navigation.goBack()} style={styles.headerIconBox}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <View style={{ alignItems: 'center' }}>
-            <Text style={styles.headerSub}>VOLTRESCUE</Text>
-            <Text style={styles.headerTitle}>Book a Charge</Text>
-          </View>
-          <View style={styles.headerIconBox} />
-        </View>
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 24) + 80 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Card 1: Contact & Location */}
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={styles.sectionIconBg}>
+                <Ionicons name="person" size={16} color="#059669" />
+              </View>
+              <Text style={styles.sectionTitle}>Customer & Breakdown Location</Text>
+            </View>
 
-        <StepIndicator />
-
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {step === 1 && renderStep1()}
-          {step === 2 && renderStep2()}
-          {step === 3 && renderStep3()}
-        </ScrollView>
-
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[
-              styles.actionBtn,
-              (step === 1 && !isPhoneVerified) && { opacity: 0.5 }
-            ]}
-            onPress={() => {
-              if (step < 3) {
-                if (step === 1 && !isPhoneVerified) {
-                  alert('Please verify your phone number first');
-                  return;
-                }
-                handleNext();
-              } else {
-                handleRequestCharge();
-              }
-            }}
-            disabled={(step === 1 && !isPhoneVerified) || isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#000" />
-            ) : (
-              <>
-                <Text style={styles.actionBtnText}>
-                  {step < 3 ? 'CONTINUE' : 'CONFIRM BOOKING'}
-                </Text>
-                <Ionicons 
-                  name={step < 3 ? "arrow-forward" : "checkmark-done"} 
-                  size={20} 
-                  color="#000" 
-                  style={{ marginLeft: 8 }} 
+            {/* Name */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>YOUR FULL NAME *</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="person-outline" size={18} color="#64748B" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="e.g. Rahul Sharma"
+                  placeholderTextColor="#94A3B8"
                 />
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
+              </View>
+            </View>
+
+            {/* Mobile Number */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>MOBILE PHONE NUMBER *</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="call-outline" size={18} color="#64748B" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={phone}
+                  onChangeText={setPhone}
+                  placeholder="+91 98765 43210"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="phone-pad"
+                />
+              </View>
+            </View>
+
+            {/* Current Location */}
+            <View style={styles.inputGroup}>
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>BREAKDOWN LOCATION *</Text>
+                <TouchableOpacity
+                  style={styles.refreshGpsBtn}
+                  onPress={fetchLiveLocation}
+                  disabled={isFetchingLocation}
+                  activeOpacity={0.7}
+                >
+                  {isFetchingLocation ? (
+                    <ActivityIndicator size="small" color="#059669" />
+                  ) : (
+                    <>
+                      <Ionicons name="navigate-outline" size={13} color="#059669" />
+                      <Text style={styles.refreshGpsText}>Refresh GPS</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+              <View style={[styles.inputWrapper, { alignItems: 'flex-start', minHeight: 52 }]}>
+                <Ionicons name="location-sharp" size={18} color="#059669" style={[styles.inputIcon, { marginTop: 14 }]} />
+                <TextInput
+                  style={[styles.input, { paddingTop: 12, paddingBottom: 12 }]}
+                  value={address}
+                  onChangeText={setAddress}
+                  placeholder="Auto-detecting your breakdown coordinates..."
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Card 2: Vehicle & Connector Specifications */}
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={styles.sectionIconBg}>
+                <Ionicons name="car-sport" size={16} color="#059669" />
+              </View>
+              <Text style={styles.sectionTitle}>EV Specifications</Text>
+            </View>
+
+            {/* Vehicle Model Selector */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>VEHICLE MODEL / TYPE *</Text>
+              <TouchableOpacity
+                style={styles.dropdownSelector}
+                onPress={() => setIsVehicleModalVisible(true)}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="car-outline" size={18} color="#64748B" style={styles.inputIcon} />
+                <Text style={styles.dropdownText}>{vehicleModel}</Text>
+                <Ionicons name="chevron-down" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Connector Type Selector */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>CONNECTOR TYPE *</Text>
+              <TouchableOpacity
+                style={styles.dropdownSelector}
+                onPress={() => setIsConnectorModalVisible(true)}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="flash-outline" size={18} color="#059669" style={styles.inputIcon} />
+                <Text style={styles.dropdownText}>{connectorType}</Text>
+                <Ionicons name="chevron-down" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Any Problem / Remarks */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>ANY PROBLEM / REMARK (OPTIONAL)</Text>
+              <View style={[styles.inputWrapper, { alignItems: 'flex-start', minHeight: 70 }]}>
+                <Ionicons name="chatbox-ellipses-outline" size={18} color="#64748B" style={[styles.inputIcon, { marginTop: 12 }]} />
+                <TextInput
+                  style={[styles.input, { paddingTop: 10, paddingBottom: 10 }]}
+                  value={remarks}
+                  onChangeText={setRemarks}
+                  placeholder="e.g. Battery dead on highway shoulder, hazard lights on"
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Card 3: Transparent Pricing Overview (No Payment Method Selection) */}
+          <View style={styles.pricingCard}>
+            <View style={styles.pricingHeader}>
+              <View style={styles.pricingIconBox}>
+                <Ionicons name="receipt-outline" size={16} color="#059669" />
+              </View>
+              <Text style={styles.pricingTitle}>Transparent Pricing Structure</Text>
+            </View>
+
+            <View style={styles.pricingRow}>
+              <Text style={styles.pricingLabel}>Base Rescue & Dispatch Charge</Text>
+              <Text style={styles.pricingValue}>₹299.00</Text>
+            </View>
+
+            <View style={styles.pricingRow}>
+              <Text style={styles.pricingLabel}>High-Speed Energy Rate (DC Fast)</Text>
+              <Text style={styles.pricingValue}>₹24.00 <Text style={styles.perUnit}>/ kWh</Text></Text>
+            </View>
+
+            <View style={styles.pricingDivider} />
+
+            <View style={styles.pricingNotice}>
+              <Ionicons name="information-circle-outline" size={16} color="#059669" style={{ marginTop: 1 }} />
+              <Text style={styles.pricingNoticeText}>
+                No advance payment needed. Exact energy delivered is metered live, and payment is settled directly with the rescue technician via UPI QR or Cash after charging.
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+
+      {/* Floating Bottom Confirmation Bar */}
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <TouchableOpacity
+          style={styles.confirmButton}
+          onPress={handleRequestRescue}
+          disabled={isLoading}
+          activeOpacity={0.88}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <View style={styles.confirmBtnContent}>
+              <Ionicons name="flash" size={18} color="#FFFFFF" />
+              <Text style={styles.confirmBtnText}>CONFIRM RESCUE REQUEST</Text>
+              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Vehicle Model Selector Modal */}
+      <Modal
+        visible={isVehicleModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsVehicleModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setIsVehicleModalVisible(false)}
+        >
+          <View style={styles.modalSheet} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Vehicle Model / Type</Text>
+              <TouchableOpacity onPress={() => setIsVehicleModalVisible(false)}>
+                <Ionicons name="close-circle" size={24} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={VEHICLE_MODELS}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => {
+                const isSelected = vehicleModel === item;
+                return (
+                  <TouchableOpacity
+                    style={[styles.modalItem, isSelected && styles.modalItemSelected]}
+                    onPress={() => {
+                      setVehicleModel(item);
+                      setIsVehicleModalVisible(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.modalItemLeft}>
+                      <Ionicons
+                        name="car-sport"
+                        size={18}
+                        color={isSelected ? '#059669' : '#64748B'}
+                      />
+                      <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>
+                        {item}
+                      </Text>
+                    </View>
+                    {isSelected && <Ionicons name="checkmark-circle" size={20} color="#059669" />}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Connector Type Selector Modal */}
+      <Modal
+        visible={isConnectorModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsConnectorModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setIsConnectorModalVisible(false)}
+        >
+          <View style={styles.modalSheet} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Connector Type</Text>
+              <TouchableOpacity onPress={() => setIsConnectorModalVisible(false)}>
+                <Ionicons name="close-circle" size={24} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={CONNECTOR_TYPES}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => {
+                const isSelected = connectorType === item.id;
+                return (
+                  <TouchableOpacity
+                    style={[styles.modalItem, isSelected && styles.modalItemSelected]}
+                    onPress={() => {
+                      setConnectorType(item.id);
+                      setIsConnectorModalVisible(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.modalItemLeft}>
+                      <Ionicons
+                        name={item.icon as any}
+                        size={18}
+                        color={isSelected ? '#059669' : '#64748B'}
+                      />
+                      <View>
+                        <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>
+                          {item.id}
+                        </Text>
+                        <Text style={styles.modalItemSub}>{item.name}</Text>
+                      </View>
+                    </View>
+                    {isSelected && <Ionicons name="checkmark-circle" size={20} color="#059669" />}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F8FAFC',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#1A1A1A',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: '#E2E8F0',
   },
-  headerIconBox: { width: 40, alignItems: 'flex-start', justifyContent: 'center' },
-  headerIcon: { fontSize: 24 },
-  headerSub: {
-    color: colors.onSurfaceVariant,
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 2,
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  headerCenter: {
+    alignItems: 'center',
   },
   headerTitle: {
-    color: colors.primary,
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: '#0F172A',
+    fontSize: 16,
+    fontWeight: '800',
   },
-
-  progressContainer: {
+  headerSub: {
+    color: '#059669',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    gap: 16,
+  },
+  sectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  sectionHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 40,
+    gap: 8,
+    marginBottom: 4,
   },
-  stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#2A2A2A',
+  sectionIconBg: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#ECFDF5',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#444'
   },
-  stepCircleActive: {
-    backgroundColor: 'rgba(47,248,1,0.1)',
-    borderColor: colors.secondaryContainer,
-    borderWidth: 2,
+  sectionTitle: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
-  stepNumber: { color: colors.onSurfaceVariant, fontSize: 12, fontWeight: 'bold' },
-  stepNumberActive: { color: colors.secondaryContainer },
-  stepCheck: { color: colors.secondaryContainer, fontSize: 16, fontWeight: 'bold' },
-  progressLine: { flex: 1, height: 2, backgroundColor: '#333', marginHorizontal: 8 },
-  progressLineActive: { backgroundColor: colors.secondaryContainer },
-
-  scrollContent: { padding: 20, paddingBottom: 40 },
-  stepContainer: { flex: 1 },
-  stepTitle: { color: colors.secondaryContainer, fontSize: 24, fontWeight: 'bold', marginBottom: 4 },
-  stepSubtitle: { color: colors.onSurfaceVariant, fontSize: 14, marginBottom: 24 },
-
-  card: {
-    backgroundColor: '#1E1E1E',
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#333',
+  inputGroup: {
+    gap: 6,
   },
-
-  inputGroup: { marginBottom: 20 },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   label: {
-    color: colors.onSurfaceVariant,
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-    marginBottom: 8
+    color: '#475569',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  refreshGpsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  refreshGpsText: {
+    color: '#059669',
+    fontSize: 11,
+    fontWeight: '700',
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2A2A2A',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    height: 56,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  inputIcon: { fontSize: 20, marginRight: 12 },
-  input: { flex: 1, color: '#fff', fontSize: 16, height: '100%' },
-
-  row: { flexDirection: 'row', alignItems: 'center' },
-  phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  verifyBtn: {
-    backgroundColor: 'rgba(47,248,1,0.1)',
-    paddingHorizontal: 20,
-    height: 56,
-    justifyContent: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.secondaryContainer
-  },
-  verifyBtnText: { color: colors.secondaryContainer, fontWeight: 'bold', fontSize: 12, letterSpacing: 1 },
-  verifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(47,248,1,0.05)',
-    paddingHorizontal: 16,
-    height: 56,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.secondaryContainer,
-    gap: 8
-  },
-  verifiedIcon: { fontSize: 16 },
-  verifiedText: { color: colors.secondaryContainer, fontWeight: 'bold', fontSize: 12, letterSpacing: 1 },
-  otpContainer: { marginTop: 12, padding: 16, backgroundColor: 'rgba(47,248,1,0.05)', borderRadius: 16, borderWidth: 1, borderColor: colors.secondaryContainer },
-
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2A2A2A',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#333'
-  },
-  chipActive: {
-    backgroundColor: 'rgba(47,248,1,0.05)',
-    borderColor: colors.secondaryContainer,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    minHeight: 52,
   },
-  chipText: { color: colors.onSurfaceVariant, fontWeight: 'bold', fontSize: 14 },
-  chipTextActive: { color: colors.secondaryContainer },
-
-  receiptHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 12 },
-  receiptHeaderIcon: { fontSize: 24 },
-  receiptTitle: { color: colors.secondaryContainer, fontSize: 18, fontWeight: 'bold' },
-  receipt: { backgroundColor: '#2A2A2A', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#333' },
-  receiptRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  receiptLabel: { color: colors.onSurfaceVariant, fontSize: 14, fontWeight: '500' },
-  receiptValue: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-  receiptTotalLabel: { color: colors.secondaryContainer, fontWeight: 'bold', fontSize: 18 },
-  receiptTotalValue: { color: colors.secondaryContainer, fontWeight: 'bold', fontSize: 20, letterSpacing: 1 },
-  divider: { borderBottomWidth: 1, borderBottomColor: '#444', paddingBottom: 16, marginBottom: 8 },
-
-  footer: {
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    backgroundColor: '#1A1A1A',
-    borderTopWidth: 1,
-    borderTopColor: '#333',
+  inputIcon: {
+    marginRight: 10,
   },
-  actionBtn: {
-    backgroundColor: colors.secondaryContainer,
-    height: 56,
-    borderRadius: 28,
+  input: {
+    flex: 1,
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  dropdownSelector: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 52,
+  },
+  dropdownText: {
+    flex: 1,
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  pricingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  pricingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  pricingIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.secondaryContainer,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
+  },
+  pricingTitle: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  pricingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  pricingLabel: {
+    color: '#64748B',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  pricingValue: {
+    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  perUnit: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  pricingDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 4,
+  },
+  pricingNotice: {
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  pricingNoticeText: {
+    color: '#065F46',
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 8,
   },
-  actionBtnText: { color: '#000', fontWeight: 'bold', fontSize: 14, letterSpacing: 1 },
-  actionBtnIcon: { fontSize: 16, marginLeft: 8 },
+  confirmButton: {
+    backgroundColor: '#059669',
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  confirmBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  confirmBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  modalItemSelected: {
+    backgroundColor: '#ECFDF5',
+  },
+  modalItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  modalItemText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  modalItemTextSelected: {
+    color: '#059669',
+    fontWeight: '800',
+  },
+  modalItemSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
 });
 
 export default BookingWizardScreen;

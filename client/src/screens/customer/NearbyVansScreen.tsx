@@ -1,11 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, SafeAreaView, Platform, StatusBar } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  StatusBar,
+  Platform,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { colors } from '../../theme/colors';
 import api from '../../services/api';
 
 const NearbyVansScreen = ({ navigation }: any) => {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0) + 6;
   const [nearbyVans, setNearbyVans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -16,20 +28,16 @@ const NearbyVansScreen = ({ navigation }: any) => {
   const fetchNearbyVans = async () => {
     try {
       setLoading(true);
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      let lng = -122.406417; // Default fallback
-      let lat = 37.785834;
-      
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      let lng = -122.4194;
+      let lat = 37.7749;
       if (status === 'granted') {
-        const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        lng = location.coords.longitude;
-        lat = location.coords.latitude;
+        const loc = await Location.getCurrentPositionAsync({});
+        lng = loc.coords.longitude;
+        lat = loc.coords.latitude;
       }
-
       const response = await api.get(`/operators/nearby?lng=${lng}&lat=${lat}`);
-      if (response.data?.data?.operators) {
-        setNearbyVans(response.data.data.operators);
-      }
+      setNearbyVans(response.data?.data?.operators || []);
     } catch (error) {
       console.error('Error fetching nearby vans:', error);
     } finally {
@@ -37,46 +45,53 @@ const NearbyVansScreen = ({ navigation }: any) => {
     }
   };
 
-  const renderVan = ({ item: van }: { item: any }) => {
-    const distance = van.dist?.calculated ? (van.dist.calculated / 1609.34).toFixed(1) : (Math.random() * 5 + 0.5).toFixed(1);
-    const etaMinutes = Math.max(1, Math.round((van.dist?.calculated || 2000) / 400));
-    
+  const renderVan = ({ item }: { item: any }) => {
+    const distKm = item.dist?.calculated ? (item.dist.calculated / 1000).toFixed(1) : '2.4';
+    const etaMin = Math.max(2, Math.round(Number(distKm) * 2.5));
+
     return (
-      <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('BookingWizard')}>
+      <View style={styles.vanCard}>
         <View style={styles.cardHeader}>
-          <View style={styles.vanIconBg}>
-            <Text style={styles.vanIcon}>🚚</Text>
+          <View style={styles.driverRow}>
+            <View style={styles.avatarBox}>
+              <Ionicons name="car" size={22} color="#059669" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.driverName}>{item.name || 'VoltRescue Unit'}</Text>
+              <Text style={styles.vehicleModel}>{item.vehicleDetails?.model || 'Mobile DC Fast Van'}</Text>
+            </View>
           </View>
-          <View style={styles.vanInfo}>
-            <Text style={styles.vanName}>{van.name || `Van #${van._id.substring(0,4)}`}</Text>
-            <Text style={styles.vanDistance}>{distance} miles away • ~{etaMinutes} mins ETA</Text>
-          </View>
-          <View style={[styles.liveBadge, van.status !== 'ONLINE' && { borderColor: '#888', backgroundColor: 'transparent' }]}>
-            <View style={[styles.liveDot, van.status !== 'ONLINE' && { backgroundColor: '#888' }]} />
-            <Text style={[styles.liveText, van.status !== 'ONLINE' && { color: '#ccc' }]}>{van.status === 'ONLINE' ? 'LIVE' : van.status}</Text>
+          <View style={styles.etaBadge}>
+            <Text style={styles.etaText}>~{etaMin} mins</Text>
           </View>
         </View>
 
         <View style={styles.divider} />
 
-        <View style={styles.footerRow}>
+        <View style={styles.cardFooter}>
           <View style={styles.capability}>
-            <Ionicons name="flash-outline" size={14} color={colors.onSurfaceVariant} />
-            <Text style={styles.capabilityText}>Fast Charge</Text>
+            <Ionicons name="flash" size={14} color="#059669" />
+            <Text style={styles.capabilityText}>150kW DC Fast Output • CCS2 Ready</Text>
           </View>
-          <TouchableOpacity style={styles.requestBtn} onPress={() => navigation.navigate('BookingWizard')}>
+          <TouchableOpacity
+            style={styles.requestBtn}
+            onPress={() => navigation.navigate('BookingWizard')}
+            activeOpacity={0.85}
+          >
             <Text style={styles.requestBtnText}>Request</Text>
           </TouchableOpacity>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={[styles.safeArea, { paddingTop: topInset }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={22} color="#0F172A" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Nearby Rescue Vans</Text>
         <View style={{ width: 40 }} />
@@ -84,53 +99,212 @@ const NearbyVansScreen = ({ navigation }: any) => {
 
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={colors.secondaryContainer} />
+          <ActivityIndicator size="large" color="#059669" />
         </View>
       ) : nearbyVans.length === 0 ? (
         <View style={styles.centerContainer}>
-          <Ionicons name="sad-outline" size={64} color="#333" style={{ marginBottom: 16 }} />
-          <Text style={styles.emptyText}>No rescue vans available nearby</Text>
+          <View style={styles.emptyIconBox}>
+            <Ionicons name="car-sport-outline" size={44} color="#94A3B8" />
+          </View>
+          <Text style={styles.emptyTitle}>No rescue vans in immediate radius</Text>
+          <Text style={styles.emptySub}>
+            You can still submit a rescue request and dispatch will route the closest unit.
+          </Text>
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => navigation.navigate('BookingWizard')}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="flash" size={18} color="#FFFFFF" />
+            <Text style={styles.actionBtnText}>Request Emergency Charge</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
           data={nearbyVans}
-          keyExtractor={item => item._id}
+          keyExtractor={(item) => item._id || Math.random().toString()}
           renderItem={renderVan}
-          contentContainerStyle={styles.listContainer}
+          contentContainerStyle={[styles.listContainer, { paddingBottom: Math.max(insets.bottom, 24) }]}
           refreshing={loading}
           onRefresh={fetchNearbyVans}
+          showsVerticalScrollIndicator={false}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#1A1A1A', borderBottomWidth: 1, borderBottomColor: '#333' },
-  backBtn: { width: 40, alignItems: 'flex-start' },
-  headerTitle: { color: colors.primary, fontSize: 18, fontWeight: 'bold' },
-  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  emptyText: { color: colors.onSurfaceVariant, fontSize: 16, marginBottom: 24 },
-  listContainer: { padding: 16, paddingBottom: 40 },
-  
-  card: { backgroundColor: '#1E1E1E', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#333' },
-  cardHeader: { flexDirection: 'row', alignItems: 'center' },
-  vanIconBg: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(47,248,1,0.1)', alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, borderColor: colors.secondaryContainer },
-  vanIcon: { fontSize: 20 },
-  vanInfo: { flex: 1 },
-  vanName: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
-  vanDistance: { color: colors.onSurfaceVariant, fontSize: 12 },
-  liveBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(47,248,1,0.05)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: colors.secondaryContainer },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.secondaryContainer, marginRight: 4 },
-  liveText: { color: colors.secondaryContainer, fontSize: 10, fontWeight: 'bold' },
-  
-  divider: { height: 1, backgroundColor: '#333', marginVertical: 16 },
-  footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  capability: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  capabilityText: { color: colors.onSurfaceVariant, fontSize: 12 },
-  requestBtn: { backgroundColor: colors.secondaryContainer, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20 },
-  requestBtnText: { color: '#000', fontWeight: 'bold', fontSize: 12 }
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  headerTitle: {
+    color: '#0F172A',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  emptyIconBox: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    color: '#0F172A',
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  emptySub: {
+    color: '#64748B',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#059669',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 16,
+    gap: 8,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  actionBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  listContainer: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  vanCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  driverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  avatarBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  driverName: {
+    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  vehicleModel: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  etaBadge: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  etaText: {
+    color: '#059669',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 14,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  capability: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  capabilityText: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  requestBtn: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  requestBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 12,
+  },
 });
 
 export default NearbyVansScreen;

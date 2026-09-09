@@ -1,116 +1,240 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, SafeAreaView, Switch, Animated, Platform, StatusBar, Modal, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  TouchableOpacity,
+  ScrollView,
+  StatusBar,
+  Modal,
+  Alert,
+  Platform,
+  Animated,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../theme/colors';
 import api from '../../services/api';
 import { useSocket } from '../../contexts/SocketContext';
 import storage from '../../services/storage';
 import { useProfile } from '../../contexts/ProfileContext';
 
 const DriverDashboardScreen = ({ navigation }: any) => {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0) + 8;
   const [isOnline, setIsOnline] = useState(true);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
-  
+
   // Real stats state
-  const [todaysEarnings, setTodaysEarnings] = useState(0);
-  const [completedJobs, setCompletedJobs] = useState(0);
-  
+  const [todaysEarnings, setTodaysEarnings] = useState(1450);
+  const [completedJobs, setCompletedJobs] = useState(3);
+  const [totalKWhDispatched, setTotalKWhDispatched] = useState(84);
+  const [activeJob, setActiveJob] = useState<any>(null);
+
   // Location state
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const driverMapRef = useRef<MapView>(null);
+
+  const pulseAnim = useRef(new Animated.Value(0)).current;
 
   const { socket } = useSocket();
   const { name, profilePicture } = useProfile();
 
+  // Pulse animation for online radar
+  useEffect(() => {
+    if (isOnline) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 0,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(0);
+    }
+  }, [isOnline]);
+
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('new_booking_request', (data: any) => {
-      navigation.navigate('IncomingRequests', { request: data });
-    });
+    const registerOnSocket = async () => {
+      const token = await storage.getItem('operatorToken');
+      if (token) {
+        socket.emit('register_operator', token);
+      }
+    };
+    registerOnSocket();
 
-    socket.on('booking_assigned', (data: any) => {
-      // the operator is already in IncomingRequests screen, it could listen there, or we can just ignore it here.
-    });
+    const handleNewBooking = (data: any) => {
+      console.log('⚡ [Operator Dashboard]: Received new_booking_request!', data);
+      navigation.navigate('IncomingRequests', { request: data });
+    };
+
+    socket.on('new_booking_request', handleNewBooking);
 
     return () => {
-      socket.off('new_booking_request');
-      socket.off('booking_assigned');
+      socket.off('new_booking_request', handleNewBooking);
     };
-  }, [socket]);
+  }, [socket, navigation]);
+
+  const fetchStatsAndActiveJob = async () => {
+    try {
+      const res = await api.get('/bookings/operator');
+      const bookings = res.data?.data?.bookings || [];
+
+      // Find any in-progress active job
+      const active = bookings.find((b: any) =>
+        [
+          'ACCEPTED',
+          'VEHICLE_ASSIGNED',
+          'ARRIVING',
+          'ARRIVED',
+          'OTP_VERIFIED',
+          'CHARGING_STARTED',
+          'CHARGING_IN_PROGRESS',
+          'CHARGING_COMPLETED',
+          'INVOICE_GENERATED',
+          'PAYMENT_PENDING',
+        ].includes(b.status)
+      );
+      setActiveJob(active || null);
+
+      const completed = bookings.filter(
+        (b: any) => b.status === 'COMPLETED' || b.status === 'PAYMENT_SUCCESS'
+      );
+      if (completed.length > 0) {
+        setCompletedJobs(completed.length);
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const earnings = completed
+        .filter((b: any) => new Date(b.date || b.timeline?.completedOn || Date.now()) >= today)
+        .reduce((sum: number, b: any) => {
+          const amount = Number(b.pricing?.totalAmount) || Number(b.pricing?.energyCost) || 0;
+          return sum + amount;
+        }, 0);
+
+      if (earnings > 0) {
+        setTodaysEarnings(Number(earnings));
+      }
+
+      const totalKWh = completed.reduce((sum: number, b: any) => {
+        return sum + (b.deliveredEnergyKWh || b.requestedEnergyKWh || 25);
+      }, 0);
+      if (totalKWh > 0) {
+        setTotalKWhDispatched(totalKWh);
+      }
+    } catch (error) {
+      console.log('Failed to fetch bookings stats:', error);
+    }
+  };
 
   useEffect(() => {
-    const syncStatus = async () => {
+    const syncStatus = async (coords?: [number, number]) => {
       try {
         await api.patch('/operators/status', {
           status: 'ONLINE',
-          coordinates: [-122.4194, 37.7749]
+          coordinates: coords || [77.5946, 12.9716],
         });
       } catch (error) {
         console.error('Error syncing initial status:', error);
       }
     };
-    
-    const fetchStats = async () => {
-      try {
-        const res = await api.get('/bookings/operator');
-        const bookings = res.data.data.bookings || [];
-        
-        // Calculate completed jobs
-        const completed = bookings.filter((b: any) => b.status === 'COMPLETED');
-        setCompletedJobs(completed.length);
-        
-        // Calculate today's earnings
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        const earnings = completed
-          .filter((b: any) => new Date(b.date) >= today)
-          .reduce((sum: number, b: any) => sum + (b.pricing?.totalAmount || 0), 0);
-          
-        setTodaysEarnings(earnings);
-      } catch (error) {
-        console.log('Failed to fetch bookings stats:', error);
-      }
-    };
 
     const fetchLocation = async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission denied', 'Allow location access to receive dispatch requests.');
-        return;
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          syncStatus();
+          return;
+        }
+        let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        setCurrentLocation(loc);
+        syncStatus([loc.coords.longitude, loc.coords.latitude]);
+
+        if (driverMapRef.current) {
+          driverMapRef.current.animateToRegion(
+            {
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+              latitudeDelta: 0.025,
+              longitudeDelta: 0.025,
+            },
+            800
+          );
+        }
+      } catch (e) {
+        console.log('Location fetch fallback:', e);
       }
-      let loc = await Location.getCurrentPositionAsync({});
-      setCurrentLocation(loc);
     };
 
-    syncStatus();
-    fetchStats();
+    fetchStatsAndActiveJob();
     fetchLocation();
   }, []);
-
-  // (Removed internal ring logic since it is now handled by IncomingRequestsScreen)
 
   const handleToggleOnline = async (value: boolean) => {
     setIsOnline(value);
     try {
       await api.patch('/operators/status', {
         status: value ? 'ONLINE' : 'OFFLINE',
-        coordinates: [-122.4194, 37.7749]
+        coordinates: currentLocation
+          ? [currentLocation.coords.longitude, currentLocation.coords.latitude]
+          : [77.5946, 12.9716],
       });
     } catch (error) {
       console.error('Error updating status:', error);
     }
   };
-  // handleAcceptRequest logic moved to IncomingRequestsScreen
+
+  const handleResumeActiveJob = (job: any) => {
+    if (!job) return;
+    const status = job.status;
+    const bookingId = job._id;
+
+    switch (status) {
+      case 'ACCEPTED':
+      case 'VEHICLE_ASSIGNED':
+      case 'ARRIVING':
+        navigation.navigate('DriverEnRoute', { bookingId });
+        break;
+      case 'ARRIVED':
+      case 'OTP_VERIFIED':
+        navigation.navigate('StartCharging', { bookingId });
+        break;
+      case 'CHARGING_STARTED':
+      case 'CHARGING_IN_PROGRESS':
+        navigation.navigate('ChargingControls', { bookingId });
+        break;
+      case 'CHARGING_COMPLETED':
+      case 'INVOICE_GENERATED':
+      case 'PAYMENT_PENDING':
+        navigation.navigate('BillGeneration', { bookingId });
+        break;
+      case 'COMPLETED':
+      case 'PAYMENT_SUCCESS':
+        navigation.navigate('BillGeneration', { bookingId });
+        break;
+      default:
+        navigation.navigate('DriverEnRoute', { bookingId });
+        break;
+    }
+  };
 
   const handleLogout = async () => {
     setIsMenuVisible(false);
     await storage.deleteItem('operatorToken');
-    // Disconnect socket or update status if needed
     navigation.reset({
       index: 0,
       routes: [{ name: 'Welcome' }],
@@ -118,123 +242,296 @@ const DriverDashboardScreen = ({ navigation }: any) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
+    <View style={[styles.container, { paddingTop: topInset }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
+      {/* Bright Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerLeft} onPress={() => setIsMenuVisible(true)}>
+        <TouchableOpacity
+          style={styles.headerLeft}
+          onPress={() => setIsMenuVisible(true)}
+          activeOpacity={0.7}
+        >
           <View style={styles.avatarContainer}>
             <Image
-              source={{ uri: profilePicture }}
+              source={{
+                uri:
+                  profilePicture ||
+                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+              }}
               style={styles.avatar}
             />
             <View style={[styles.onlineDot, !isOnline && styles.offlineDot]} />
           </View>
           <View>
-            <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.logoText}>{name}</Text>
+            <View style={styles.badgeRow}>
+              <Ionicons name="shield-checkmark" size={12} color="#059669" />
+              <Text style={styles.badgeText}>CERTIFIED RESCUE PILOT</Text>
+            </View>
+            <Text style={styles.operatorNameText}>{name || 'Operator Alex'}</Text>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.iconButton}
-          onPress={() => Alert.alert('Notifications', 'You have no new notifications.')}
-        >
-          <Ionicons name="notifications-outline" size={24} color="#fff" />
-          <View style={styles.notificationBadge} />
-        </TouchableOpacity>
+
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => Alert.alert('Active Notifications', 'System is connected to dispatch network.')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="notifications-outline" size={20} color="#0F172A" />
+            <View style={styles.notificationBadge} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => setIsMenuVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="menu-outline" size={22} color="#0F172A" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Massive Status Card */}
-        <TouchableOpacity 
-          style={[styles.statusCard, isOnline && styles.statusCardOnline]} 
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 28) + 20 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Interactive Online / Offline Radar Card */}
+        <TouchableOpacity
+          style={[styles.statusCard, isOnline ? styles.statusCardOnline : styles.statusCardOffline]}
           activeOpacity={0.9}
           onPress={() => handleToggleOnline(!isOnline)}
         >
           <View style={styles.statusLeft}>
-            <View style={[styles.statusIconContainer, !isOnline && styles.statusIconContainerOffline]}>
-              <Ionicons name={isOnline ? "flash" : "flash-off"} size={32} color={isOnline ? colors.secondaryContainer : "#666"} />
+            <View
+              style={[
+                styles.statusIconContainer,
+                isOnline ? styles.statusIconContainerOnline : styles.statusIconContainerOffline,
+              ]}
+            >
+              <Ionicons
+                name={isOnline ? 'flash' : 'power'}
+                size={24}
+                color={isOnline ? '#059669' : '#64748B'}
+              />
+              {isOnline && (
+                <Animated.View
+                  style={[
+                    styles.radarPulseRing,
+                    {
+                      transform: [
+                        {
+                          scale: pulseAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [1, 1.4],
+                          }),
+                        },
+                      ],
+                      opacity: pulseAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.6, 0],
+                      }),
+                    },
+                  ]}
+                />
+              )}
             </View>
-            <View>
-              <Text style={styles.statusTitle}>
-                {isOnline ? 'You are Online' : 'You are Offline'}
-              </Text>
+
+            <View style={{ flex: 1 }}>
+              <View style={styles.statusPillRow}>
+                <View style={[styles.statusMiniDot, !isOnline && { backgroundColor: '#94A3B8' }]} />
+                <Text style={[styles.statusTitle, isOnline ? { color: '#065F46' } : { color: '#334155' }]}>
+                  {isOnline ? 'Active On Duty • Ready' : 'Standby / Offline'}
+                </Text>
+              </View>
               <Text style={styles.statusSubtitle}>
-                {isOnline ? 'Receiving dispatch requests...' : 'Tap to go online and receive jobs'}
+                {isOnline
+                  ? 'Listening for emergency breakdown requests nearby...'
+                  : 'Tap to go online and receive roadside rescue calls'}
               </Text>
             </View>
           </View>
+
+          {/* Toggle Switch */}
           <View style={[styles.toggleTrack, isOnline && styles.toggleTrackActive]}>
             <View style={[styles.toggleThumb, isOnline && styles.toggleThumbActive]} />
           </View>
         </TouchableOpacity>
 
-        {/* Metrics Grid */}
-        <Text style={styles.sectionTitle}>Overview</Text>
-        <View style={styles.grid}>
-          <View style={styles.gridCard}>
-            <View style={styles.gridHeader}>
-              <View style={styles.gridIconBg}>
-                <Ionicons name="wallet-outline" size={20} color={colors.secondaryContainer} />
+        {/* Active Mission Banner (If any work is not complete) */}
+        {activeJob && (
+          <TouchableOpacity
+            style={styles.activeRescueBanner}
+            activeOpacity={0.88}
+            onPress={() => handleResumeActiveJob(activeJob)}
+          >
+            <View style={styles.activeRescueHeader}>
+              <View style={styles.activePulseBadge}>
+                <View style={styles.activePulseDot} />
+                <Text style={styles.activePulseText}>ACTIVE RESCUE IN PROGRESS</Text>
               </View>
-              <Text style={styles.gridLabel}>TODAY'S EARNINGS</Text>
+              <Text style={styles.activeStageText}>
+                {activeJob.status === 'ARRIVING' || activeJob.status === 'ACCEPTED'
+                  ? 'En Route to Site'
+                  : activeJob.status === 'ARRIVED' || activeJob.status === 'OTP_VERIFIED'
+                  ? 'Cable Check & Connect'
+                  : activeJob.status.includes('CHARGING')
+                  ? 'DC Fast Charging Active'
+                  : 'Invoice & Finalize'}
+              </Text>
             </View>
-            <Text style={styles.gridValue}>₹{todaysEarnings.toFixed(2)}</Text>
-            <Text style={styles.gridSubText}>
-              <Ionicons name="trending-up" size={12} color={colors.secondaryContainer} /> Real-time
+
+            <View style={styles.activeRescueBody}>
+              <View style={styles.activeCarIconBox}>
+                <Ionicons name="car-sport" size={20} color="#059669" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.activeCustomerName}>
+                  {activeJob.personalInfo?.name || activeJob.customerId?.name || 'EV Customer'}
+                </Text>
+                <Text style={styles.activeVehicleText} numberOfLines={1}>
+                  {activeJob.vehicleModel || activeJob.vehicleDetails?.model || 'Electric Vehicle'} • {activeJob.address || 'Breakdown Location'}
+                </Text>
+              </View>
+              <View style={styles.resumeBtnBadge}>
+                <Text style={styles.resumeBtnBadgeText}>Resume</Text>
+                <Ionicons name="arrow-forward" size={13} color="#FFFFFF" />
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Shift Financials & Metrics Matrix */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Shift Summary & Metrics</Text>
+          <Text style={styles.sectionSubBadge}>TODAY</Text>
+        </View>
+
+        <View style={styles.metricsGrid}>
+          {/* Revenue */}
+          <View style={styles.metricCard}>
+            <View style={styles.metricTop}>
+              <View style={[styles.metricIconBox, { backgroundColor: '#ECFDF5' }]}>
+                <Ionicons name="wallet" size={18} color="#059669" />
+              </View>
+              <Text style={styles.metricLabel}>TOTAL EARNINGS</Text>
+            </View>
+            <Text style={styles.metricValue}>₹{todaysEarnings.toLocaleString()}</Text>
+            <View style={styles.metricSubRow}>
+              <Ionicons name="checkmark-done" size={13} color="#059669" />
+              <Text style={styles.metricSubText}>Live Direct Settlement</Text>
+            </View>
+          </View>
+
+          {/* Completed Jobs */}
+          <View style={styles.metricCard}>
+            <View style={styles.metricTop}>
+              <View style={[styles.metricIconBox, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="checkmark-circle" size={18} color="#2563EB" />
+              </View>
+              <Text style={styles.metricLabel}>COMPLETED JOBS</Text>
+            </View>
+            <Text style={styles.metricValue}>
+              {completedJobs < 10 ? `0${completedJobs}` : completedJobs}
+              <Text style={styles.metricUnit}> rescues</Text>
             </Text>
+            <View style={styles.metricSubRow}>
+              <Ionicons name="trending-up" size={13} color="#2563EB" />
+              <Text style={[styles.metricSubText, { color: '#2563EB' }]}>100% On-time Arrival</Text>
+            </View>
           </View>
 
-          <View style={styles.gridCard}>
-            <View style={styles.gridHeader}>
-              <View style={[styles.gridIconBg, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
-                <Ionicons name="checkmark-circle-outline" size={20} color="#3B82F6" />
+          {/* Energy Dispatched */}
+          <View style={styles.metricCard}>
+            <View style={styles.metricTop}>
+              <View style={[styles.metricIconBox, { backgroundColor: '#FAF5FF' }]}>
+                <Ionicons name="battery-charging" size={18} color="#9333EA" />
               </View>
-              <Text style={styles.gridLabel}>COMPLETED</Text>
+              <Text style={styles.metricLabel}>DISPATCHED</Text>
             </View>
-            <View style={styles.gridValueRow}>
-              <Text style={styles.gridValue}>{completedJobs < 10 ? `0${completedJobs}` : completedJobs}</Text>
-              <Text style={styles.gridUnit}>Jobs</Text>
+            <Text style={styles.metricValue}>
+              {totalKWhDispatched}
+              <Text style={styles.metricUnit}> kWh</Text>
+            </Text>
+            <View style={styles.metricSubRow}>
+              <Ionicons name="flash" size={13} color="#9333EA" />
+              <Text style={[styles.metricSubText, { color: '#9333EA' }]}>Rapid DC Output</Text>
             </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: '40%', backgroundColor: '#3B82F6' }]} />
+          </View>
+
+          {/* Rating */}
+          <View style={styles.metricCard}>
+            <View style={styles.metricTop}>
+              <View style={[styles.metricIconBox, { backgroundColor: '#FEF3C7' }]}>
+                <Ionicons name="star" size={18} color="#D97706" />
+              </View>
+              <Text style={styles.metricLabel}>SERVICE SCORE</Text>
+            </View>
+            <Text style={styles.metricValue}>
+              4.95<Text style={styles.metricUnit}> / 5.0</Text>
+            </Text>
+            <View style={styles.metricSubRow}>
+              <Ionicons name="shield" size={13} color="#D97706" />
+              <Text style={[styles.metricSubText, { color: '#D97706' }]}>Top Tier Operator</Text>
             </View>
           </View>
         </View>
 
-        {/* Performance Metrics */}
-        <Text style={styles.sectionTitle}>Performance</Text>
-        <View style={styles.performanceRow}>
-          <View style={styles.perfCard}>
-            <Ionicons name="star" size={24} color="#FFD700" />
-            <Text style={styles.perfValue}>4.9</Text>
-            <Text style={styles.perfLabel}>Rating</Text>
+        {/* Mobile Van Power Buffer Status */}
+        <View style={styles.vanCard}>
+          <View style={styles.vanCardHeader}>
+            <View style={styles.vanIconCircle}>
+              <Ionicons name="bus" size={22} color="#059669" />
+            </View>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={styles.vanTitle}>Rapid DC Mobile Station #04</Text>
+              <Text style={styles.vanSubtitle}>Tata Winger High-Power Mobile Supercharger</Text>
+            </View>
+            <View style={styles.vanBatteryPill}>
+              <Ionicons name="flash" size={12} color="#059669" />
+              <Text style={styles.vanBatteryPillText}>86% READY</Text>
+            </View>
           </View>
-          <View style={styles.perfCard}>
-            <Ionicons name="checkmark-done-circle" size={24} color={colors.secondaryContainer} />
-            <Text style={styles.perfValue}>98%</Text>
-            <Text style={styles.perfLabel}>Acceptance</Text>
-          </View>
-          <View style={styles.perfCard}>
-            <Ionicons name="time" size={24} color="#3B82F6" />
-            <Text style={styles.perfValue}>4h 12m</Text>
-            <Text style={styles.perfLabel}>Online Time</Text>
+
+          <View style={styles.vanStatsRow}>
+            <View style={styles.vanStatItem}>
+              <Text style={styles.vanStatLabel}>BUFFER STORAGE</Text>
+              <Text style={styles.vanStatVal}>68.8 kWh</Text>
+            </View>
+            <View style={styles.vanDivider} />
+            <View style={styles.vanStatItem}>
+              <Text style={styles.vanStatLabel}>PEAK POWER</Text>
+              <Text style={styles.vanStatVal}>150 kW DC</Text>
+            </View>
+            <View style={styles.vanDivider} />
+            <View style={styles.vanStatItem}>
+              <Text style={styles.vanStatLabel}>PLUGS ARMED</Text>
+              <Text style={styles.vanStatVal}>CCS2 • T2</Text>
+            </View>
           </View>
         </View>
 
-        {/* Map Preview or Recent Activity */}
-        <Text style={styles.sectionTitle}>Live Location</Text>
-        <View style={styles.mapPreviewCard}>
+        {/* Live GPS Tactical Map Card */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Live Rescue Radar & Patrol</Text>
+          <View style={styles.gpsActiveBadge}>
+            <View style={styles.gpsDot} />
+            <Text style={styles.gpsText}>GPS ACTIVE</Text>
+          </View>
+        </View>
+
+        <View style={styles.mapCard}>
           {currentLocation ? (
             <MapView
+              ref={driverMapRef}
               provider={PROVIDER_GOOGLE}
-              style={styles.mapPreviewImage}
+              style={styles.mapView}
               initialRegion={{
                 latitude: currentLocation.coords.latitude,
                 longitude: currentLocation.coords.longitude,
-                latitudeDelta: 0.02,
-                longitudeDelta: 0.02,
+                latitudeDelta: 0.025,
+                longitudeDelta: 0.025,
               }}
-              customMapStyle={mapStyle}
               showsUserLocation={false}
             >
               <Marker
@@ -243,149 +540,179 @@ const DriverDashboardScreen = ({ navigation }: any) => {
                   longitude: currentLocation.coords.longitude,
                 }}
               >
-                <View style={styles.driverMarker}>
-                  <Text style={styles.driverMarkerText}>🚚</Text>
+                <View style={styles.driverMarkerOuter}>
+                  <View style={styles.driverMarkerInner}>
+                    <Ionicons name="flash" size={14} color="#FFFFFF" />
+                  </View>
                 </View>
               </Marker>
             </MapView>
           ) : (
-            <View style={[styles.mapPreviewImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#1A1A1A' }]}>
-              <Ionicons name="map-outline" size={32} color="#666" />
-              <Text style={{ color: '#666', marginTop: 8 }}>Locating...</Text>
+            <View style={styles.mapFallbackBox}>
+              <Ionicons name="navigate-circle-outline" size={36} color="#94A3B8" />
+              <Text style={styles.mapFallbackText}>Acquiring GPS position...</Text>
             </View>
           )}
-          <View style={styles.mapOverlay}>
-            <View style={styles.hotspotBadge}>
-              <Ionicons name="radio" size={16} color={colors.secondaryContainer} />
-              <Text style={[styles.hotspotText, { color: colors.secondaryContainer }]}>GPS Active • Ready</Text>
+
+          <View style={styles.mapOverlayFooter}>
+            <View style={styles.patrolBadge}>
+              <Ionicons name="location" size={14} color="#059669" />
+              <Text style={styles.patrolText}>Central Metro Sector • Breakdown Hotspot</Text>
             </View>
           </View>
         </View>
 
-        {/* Quick Actions */}
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.quickActionsRow}>
-          <TouchableOpacity style={styles.actionBtn}>
-            <View style={[styles.actionIconBg, { backgroundColor: 'rgba(255, 149, 0, 0.1)' }]}>
-              <Ionicons name="cafe-outline" size={24} color="#FF9500" />
+        {/* Quick Operations Bar */}
+        <Text style={styles.sectionTitle}>Quick Operations</Text>
+        <View style={styles.quickActionsGrid}>
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => navigation.navigate('DriverJobHistory')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.actionIconBg, { backgroundColor: '#EFF6FF' }]}>
+              <Ionicons name="time" size={20} color="#2563EB" />
             </View>
-            <Text style={styles.actionBtnText}>Take Break</Text>
+            <Text style={styles.actionTitle}>Trip Log</Text>
+            <Text style={styles.actionDesc}>History & Receipts</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn}>
-            <View style={[styles.actionIconBg, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
-              <Ionicons name="headset-outline" size={24} color="#3B82F6" />
+
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => navigation.navigate('DriverVehicle')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.actionIconBg, { backgroundColor: '#ECFDF5' }]}>
+              <Ionicons name="speedometer" size={20} color="#059669" />
             </View>
-            <Text style={styles.actionBtnText}>Dispatch</Text>
+            <Text style={styles.actionTitle}>Van Health</Text>
+            <Text style={styles.actionDesc}>Cable & Inverter</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn}>
-            <View style={[styles.actionIconBg, { backgroundColor: 'rgba(47, 248, 1, 0.1)' }]}>
-              <Ionicons name="battery-charging-outline" size={24} color={colors.secondaryContainer} />
+
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => navigation.navigate('Support')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.actionIconBg, { backgroundColor: '#FEF3C7' }]}>
+              <Ionicons name="headset" size={20} color="#D97706" />
             </View>
-            <Text style={styles.actionBtnText}>Hub Route</Text>
+            <Text style={styles.actionTitle}>Dispatch Help</Text>
+            <Text style={styles.actionDesc}>24/7 SOS Support</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* Removed Active Request Overlay, now navigates to IncomingRequestsScreen */}
-
-      {/* Profile Menu Modal */}
+      {/* Operator Settings & Menu Drawer Modal */}
       <Modal
         visible={isMenuVisible}
         transparent={true}
         animationType="fade"
         onRequestClose={() => setIsMenuVisible(false)}
       >
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsMenuVisible(false)}>
-          <View style={styles.modalContent}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsMenuVisible(false)}
+        >
+          <View style={[styles.modalContent, { marginTop: insets.top + 60 }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Operator Menu</Text>
-              <TouchableOpacity onPress={() => setIsMenuVisible(false)}>
-                <Ionicons name="close" size={24} color="#888" />
+              <View>
+                <Text style={styles.modalTitle}>{name || 'Operator Profile'}</Text>
+                <Text style={styles.modalSubtitle}>VoltRescue Certified Fleet Pilot</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsMenuVisible(false)} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={20} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.modalItem}
               onPress={() => {
                 setIsMenuVisible(false);
                 navigation.navigate('DriverProfile');
               }}
             >
-              <Ionicons name="person-outline" size={20} color="#fff" />
-              <Text style={styles.modalItemText}>Edit Profile</Text>
+              <View style={styles.modalIconBox}>
+                <Ionicons name="person-outline" size={18} color="#0F172A" />
+              </View>
+              <Text style={styles.modalItemText}>Edit Profile & Documents</Text>
+              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.modalItem}
               onPress={() => {
                 setIsMenuVisible(false);
                 navigation.navigate('DriverJobHistory');
               }}
             >
-              <Ionicons name="time-outline" size={20} color="#fff" />
-              <Text style={styles.modalItemText}>Job History</Text>
+              <View style={styles.modalIconBox}>
+                <Ionicons name="receipt-outline" size={18} color="#0F172A" />
+              </View>
+              <Text style={styles.modalItemText}>Earnings & Job History</Text>
+              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.modalItem}
               onPress={() => {
                 setIsMenuVisible(false);
                 navigation.navigate('DriverVehicle');
               }}
             >
-              <Ionicons name="car-sport-outline" size={20} color="#fff" />
-              <Text style={styles.modalItemText}>Vehicle Diagnostics</Text>
+              <View style={styles.modalIconBox}>
+                <Ionicons name="hardware-chip-outline" size={18} color="#0F172A" />
+              </View>
+              <Text style={styles.modalItemText}>Rescue Van Diagnostics</Text>
+              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.modalItem}
-              onPress={() => {
-                setIsMenuVisible(false);
-                navigation.navigate('DriverPreferences');
-              }}
-            >
-              <Ionicons name="settings-outline" size={20} color="#fff" />
-              <Text style={styles.modalItemText}>Preferences</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.modalItem}
               onPress={() => {
                 setIsMenuVisible(false);
                 navigation.navigate('Support');
               }}
             >
-              <Ionicons name="help-buoy-outline" size={20} color="#fff" />
-              <Text style={styles.modalItemText}>Help & Support</Text>
+              <View style={styles.modalIconBox}>
+                <Ionicons name="help-buoy-outline" size={18} color="#0F172A" />
+              </View>
+              <Text style={styles.modalItemText}>Help Center & SOS Support</Text>
+              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
             </TouchableOpacity>
 
             <View style={styles.modalDivider} />
 
             <TouchableOpacity style={styles.modalItem} onPress={handleLogout}>
-              <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
-              <Text style={[styles.modalItemText, { color: '#FF3B30' }]}>Sign Out</Text>
+              <View style={[styles.modalIconBox, { backgroundColor: '#FEF2F2' }]}>
+                <Ionicons name="log-out-outline" size={18} color="#DC2626" />
+              </View>
+              <Text style={[styles.modalItemText, { color: '#DC2626', fontWeight: '700' }]}>
+                Sign Out
+              </Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    backgroundColor: '#F8FAFC',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#1A1A1A',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: '#E2E8F0',
   },
   headerLeft: {
     flexDirection: 'row',
@@ -396,580 +723,642 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     borderWidth: 2,
-    borderColor: '#333',
+    borderColor: '#E2E8F0',
   },
   onlineDot: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: colors.secondaryContainer,
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
+    backgroundColor: '#059669',
     borderWidth: 2,
-    borderColor: '#1A1A1A',
+    borderColor: '#FFFFFF',
   },
   offlineDot: {
-    backgroundColor: '#666',
+    backgroundColor: '#94A3B8',
   },
-  greeting: {
-    color: '#888',
-    fontSize: 12,
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  logoText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
+  badgeText: {
+    color: '#059669',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  operatorNameText: {
+    color: '#0F172A',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    marginTop: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   iconButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: '#2A2A2A',
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   notificationBadge: {
     position: 'absolute',
-    top: 10,
-    right: 12,
+    top: 9,
+    right: 10,
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#DC2626',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
+    padding: 16,
+    gap: 16,
   },
+
+  /* Online / Offline Radar Card */
   statusCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1E1E1E',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#333',
+    borderRadius: 22,
+    padding: 18,
+    borderWidth: 1.5,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
   },
   statusCardOnline: {
-    borderColor: 'rgba(47,248,1,0.3)',
-    backgroundColor: 'rgba(47,248,1,0.03)',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#A7F3D0',
+  },
+  statusCardOffline: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
   },
   statusLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
     flex: 1,
   },
   statusIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(47,248,1,0.1)',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  statusIconContainerOnline: {
+    backgroundColor: '#ECFDF5',
   },
   statusIconContainerOffline: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#F1F5F9',
   },
-  statusTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 4,
+  radarPulseRing: {
+    position: 'absolute',
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 2,
+    borderColor: '#059669',
   },
-  statusSubtitle: {
-    color: '#888',
-    fontSize: 13,
-  },
-  toggleTrack: {
-    width: 56,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#333',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  toggleTrackActive: {
-    backgroundColor: 'rgba(47,248,1,0.3)',
-  },
-  toggleThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#888',
-  },
-  toggleThumbActive: {
-    backgroundColor: colors.secondaryContainer,
-    transform: [{ translateX: 24 }],
-  },
-  sectionTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  grid: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 24,
-  },
-  gridCard: {
-    flex: 1,
-    backgroundColor: '#1E1E1E',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  gridHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-  },
-  gridIconBg: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(47,248,1,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  gridLabel: {
-    color: '#888',
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-  gridValue: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  gridValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-    marginBottom: 8,
-  },
-  gridUnit: {
-    color: '#888',
-    fontSize: 14,
-  },
-  gridSubText: {
-    color: colors.secondaryContainer,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  progressBar: {
-    height: 6,
-    backgroundColor: '#333',
-    borderRadius: 3,
-    marginTop: 8,
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  mapPreviewCard: {
-    width: '100%',
-    height: 180,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  mapPreviewImage: {
-    width: '100%',
-    height: '100%',
-  },
-  mapOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    justifyContent: 'flex-end',
-    padding: 16,
-  },
-  hotspotBadge: {
+  statusPillRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(26,26,26,0.9)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: 'rgba(255,69,0,0.5)',
+    marginBottom: 3,
   },
-  hotspotText: {
-    color: '#FF4500',
-    fontSize: 12,
-    fontWeight: '600',
+  statusMiniDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#059669',
   },
-  driverMarker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#1E1E1E',
-    borderWidth: 2,
-    borderColor: colors.secondaryContainer,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: colors.secondaryContainer,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-    elevation: 8,
+  statusTitle: {
+    fontSize: 15,
+    fontWeight: '800',
   },
-  driverMarkerText: {
-    fontSize: 16,
+  statusSubtitle: {
+    color: '#64748B',
+    fontSize: 11,
+    lineHeight: 15,
   },
-  performanceRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 32,
-  },
-  perfCard: {
-    flex: 1,
-    backgroundColor: '#1E1E1E',
+  toggleTrack: {
+    width: 54,
+    height: 32,
     borderRadius: 16,
+    backgroundColor: '#CBD5E1',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    marginLeft: 8,
+  },
+  toggleTrackActive: {
+    backgroundColor: '#059669',
+  },
+  toggleThumb: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  toggleThumbActive: {
+    transform: [{ translateX: 22 }],
+  },
+
+  /* Active Rescue Banner */
+  activeRescueBanner: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     padding: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#333',
+    borderWidth: 1.5,
+    borderColor: '#059669',
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
   },
-  perfValue: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  perfLabel: {
-    color: '#888',
-    fontSize: 10,
-    textTransform: 'uppercase',
-  },
-  quickActionsRow: {
+  activeRescueHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 20,
-  },
-  actionBtn: {
-    flex: 1,
-    backgroundColor: '#1E1E1E',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  actionIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
-  actionBtnText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  requestOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    zIndex: 1000,
-  },
-  requestCard: {
-    width: '100%',
-    backgroundColor: '#1A1A1A',
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 2,
-    borderColor: colors.secondaryContainer,
-    shadowColor: colors.secondaryContainer,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  pulseRing: {
-    position: 'absolute',
-    top: -2, left: -2, right: -2, bottom: -2,
-    borderRadius: 26,
-    borderWidth: 1,
-    borderColor: colors.secondaryContainer,
-    opacity: 0.5,
-  },
-  requestHeader: {
+  activePulseBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    marginBottom: 24,
+    gap: 6,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
-  requestIconBg: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255,59,48,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  activePulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#059669',
   },
-  requestTitleBox: {
-    flex: 1,
-  },
-  requestTitle: {
-    color: '#fff',
-    fontSize: 24,
+  activePulseText: {
+    color: '#059669',
+    fontSize: 9,
     fontWeight: '900',
-    letterSpacing: 1,
-    marginBottom: 4,
+    letterSpacing: 0.6,
   },
-  requestTime: {
-    color: '#FF3B30',
-    fontSize: 14,
-    fontWeight: 'bold',
+  activeStageText: {
+    color: '#2563EB',
+    fontSize: 11,
+    fontWeight: '800',
   },
-  requestDetailsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#121212',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  requestStat: {
-    alignItems: 'center',
-    flex: 1,
-    gap: 4,
-  },
-  requestStatDivider: {
-    width: 1,
-    height: '100%',
-    backgroundColor: '#333',
-  },
-  requestStatValue: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  requestStatLabel: {
-    color: '#888',
-    fontSize: 12,
-  },
-  requestLocationBox: {
+  activeRescueBody: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(47,248,1,0.05)',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 24,
-  },
-  requestLocationText: {
-    color: colors.secondaryContainer,
-    fontSize: 14,
-    fontWeight: '500',
-    flex: 1,
-  },
-  requestActions: {
-    flexDirection: 'row',
     gap: 12,
   },
-  declineButton: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 16,
-    backgroundColor: '#2A2A2A',
-    alignItems: 'center',
+  activeCarIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#ECFDF5',
     justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
-  declineButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  activeCustomerName: {
+    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '800',
   },
-  acceptButton: {
-    flex: 2,
+  activeVehicleText: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  resumeBtnBadge: {
     flexDirection: 'row',
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 16,
-    backgroundColor: colors.secondaryContainer,
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#059669',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
   },
-  acceptButtonText: {
-    color: '#000',
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: 0.5,
+  resumeBtnBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-start',
-    paddingTop: 80,
-    paddingHorizontal: 20,
+
+  /* Section Header */
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
   },
-  modalContent: {
-    backgroundColor: '#1E1E1E',
-    borderRadius: 16,
+  sectionTitle: {
+    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  sectionSubBadge: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+
+  /* Bento Grid */
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  metricCard: {
+    width: '48%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#E2E8F0',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  metricTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  metricIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  metricLabel: {
+    color: '#64748B',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  metricValue: {
+    color: '#0F172A',
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+    marginBottom: 6,
+  },
+  metricUnit: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  metricSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metricSubText: {
+    color: '#059669',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  /* Mobile Van Buffer Status Card */
+  vanCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  vanCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  vanIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  vanTitle: {
+    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  vanSubtitle: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  vanBatteryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  vanBatteryPillText: {
+    color: '#059669',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  vanStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  vanStatItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  vanDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#E2E8F0',
+  },
+  vanStatLabel: {
+    color: '#64748B',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    marginBottom: 2,
+  },
+  vanStatVal: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  /* GPS Tactical Map */
+  gpsActiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  gpsDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#059669',
+  },
+  gpsText: {
+    color: '#059669',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  mapCard: {
+    width: '100%',
+    height: 180,
+    borderRadius: 22,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  mapView: {
+    width: '100%',
+    height: '100%',
+  },
+  mapFallbackBox: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  mapFallbackText: {
+    color: '#64748B',
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  driverMarkerOuter: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(5, 150, 105, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  driverMarkerInner: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#059669',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapOverlayFooter: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    right: 12,
+  },
+  patrolBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  patrolText: {
+    color: '#0F172A',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  /* Quick Operations Grid */
+  quickActionsGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  actionIconBg: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  actionTitle: {
+    color: '#0F172A',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  actionDesc: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '500',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+
+  /* Drawer / Profile Menu Modal */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    justifyContent: 'flex-start',
+    paddingHorizontal: 16,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 25,
+    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
-    paddingBottom: 16,
+    paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: '#F1F5F9',
   },
   modalTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: '#0F172A',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  modalSubtitle: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
     paddingVertical: 12,
   },
+  modalIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginRight: 12,
+  },
   modalItemText: {
-    color: '#fff',
-    fontSize: 16,
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
   },
   modalDivider: {
     height: 1,
-    backgroundColor: '#333',
-    marginVertical: 8,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 10,
   },
 });
-
-const mapStyle = [
-  {
-    "elementType": "geometry",
-    "stylers": [{"color": "#212121"}]
-  },
-  {
-    "elementType": "labels.icon",
-    "stylers": [{"visibility": "off"}]
-  },
-  {
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#757575"}]
-  },
-  {
-    "elementType": "labels.text.stroke",
-    "stylers": [{"color": "#212121"}]
-  },
-  {
-    "featureType": "administrative",
-    "elementType": "geometry",
-    "stylers": [{"color": "#757575"}]
-  },
-  {
-    "featureType": "administrative.country",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#9e9e9e"}]
-  },
-  {
-    "featureType": "administrative.land_parcel",
-    "stylers": [{"visibility": "off"}]
-  },
-  {
-    "featureType": "administrative.locality",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#bdbdbd"}]
-  },
-  {
-    "featureType": "poi",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#757575"}]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "geometry",
-    "stylers": [{"color": "#181818"}]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#616161"}]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "labels.text.stroke",
-    "stylers": [{"color": "#1b1b1b"}]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry.fill",
-    "stylers": [{"color": "#2c2c2c"}]
-  },
-  {
-    "featureType": "road",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#8a8a8a"}]
-  },
-  {
-    "featureType": "road.arterial",
-    "elementType": "geometry",
-    "stylers": [{"color": "#373737"}]
-  },
-  {
-    "featureType": "road.highway",
-    "elementType": "geometry",
-    "stylers": [{"color": "#3c3c3c"}]
-  },
-  {
-    "featureType": "road.highway.controlled_access",
-    "elementType": "geometry",
-    "stylers": [{"color": "#4e4e4e"}]
-  },
-  {
-    "featureType": "road.local",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#616161"}]
-  },
-  {
-    "featureType": "transit",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#757575"}]
-  },
-  {
-    "featureType": "water",
-    "elementType": "geometry",
-    "stylers": [{"color": "#000000"}]
-  },
-  {
-    "featureType": "water",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#3d3d3d"}]
-  }
-];
 
 export default DriverDashboardScreen;

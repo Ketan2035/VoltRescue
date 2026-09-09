@@ -16,5 +16,6 @@ router.get('/operator', bookingController.getOperatorBookings);
 router.get('/availability', bookingController.getAvailability);
 router.get('/:bookingId', bookingController.getDetails);
 router.patch('/:bookingId/status', bookingController.updateStatus);
+router.post('/:bookingId/rating', bookingController.submitRating);
 
 export default router;

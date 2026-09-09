@@ -1,32 +1,91 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, SafeAreaView, Animated, Easing, TextInput, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Animated,
+  Easing,
+  TextInput,
+  ActivityIndicator,
+  Platform,
+  StatusBar,
+  BackHandler,
+  Alert,
+  Linking,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import storage from '../../services/storage';
-import { colors } from '../../theme/colors';
 import { useBookingState } from '../../hooks/useBookingState';
 import api from '../../services/api';
 
 const StartChargingScreen = ({ route, navigation }: any) => {
-  const { bookingId } = route.params || {};
-  const { status } = useBookingState(bookingId);
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0) + 6;
+  const { bookingId, isOperator: paramIsOperator } = route.params || {};
+  const { status: socketStatus } = useBookingState(bookingId);
 
-  const [isOperator, setIsOperator] = useState(false);
+  const [isOperator, setIsOperator] = useState(paramIsOperator !== undefined ? paramIsOperator : true);
+  const [localStatus, setLocalStatus] = useState<string | null>(null);
   const [checklist, setChecklist] = useState({
-    cable: true,
-    perimeter: false,
+    cable: false, // Operator must manually confirm physical cable is plugged in!
+    perimeter: true,
   });
-  
+
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [isStarting, setIsStarting] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [otp, setOtp] = useState('');
-  const pulseAnim = React.useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+  const otpVerifiedRef = useRef(false);
+
+  const currentStatus = socketStatus || localStatus || bookingDetails?.status;
+  const isOtpVerified = [
+    'OTP_VERIFIED',
+    'CHARGING_STARTED',
+    'CHARGING_IN_PROGRESS',
+    'CHARGING_COMPLETED',
+    'INVOICE_GENERATED',
+    'PAYMENT_PENDING',
+    'PAYMENT_SUCCESS',
+    'COMPLETED',
+    'BOOKING_COMPLETED',
+  ].includes(currentStatus || '');
 
   useEffect(() => {
     const checkRole = async () => {
+      if (paramIsOperator !== undefined) {
+        setIsOperator(paramIsOperator);
+        return;
+      }
       const token = await storage.getItem('operatorToken');
-      if (token) setIsOperator(true);
+      setIsOperator(!!token);
     };
     checkRole();
+  }, [paramIsOperator]);
+
+  // Prevent closing during site arrival & OTP handshake
+  useEffect(() => {
+    const onBackPress = () => {
+      return true; // prevent accidental exit
+    };
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => backHandler.remove();
   }, []);
+
+  // Auto-navigate customer to LiveCharging once technician initiates charging
+  useEffect(() => {
+    if (!isOperator) {
+      if (
+        currentStatus === 'CHARGING_STARTED' ||
+        currentStatus === 'CHARGING_IN_PROGRESS'
+      ) {
+        navigation.navigate('LiveCharging', { bookingId });
+      }
+    }
+  }, [isOperator, currentStatus, bookingId, navigation]);
 
   useEffect(() => {
     Animated.loop(
@@ -49,7 +108,11 @@ const StartChargingScreen = ({ route, navigation }: any) => {
     const fetchDetails = async () => {
       try {
         const res = await api.get(`/bookings/${bookingId}`);
-        setBookingDetails(res.data.data.booking);
+        const booking = res.data.data.booking;
+        setBookingDetails(booking);
+        if (booking?.status) {
+          setLocalStatus(booking.status);
+        }
       } catch (err) {
         console.error('Failed to fetch booking details:', err);
       }
@@ -59,173 +122,248 @@ const StartChargingScreen = ({ route, navigation }: any) => {
     }
   }, [bookingId]);
 
-  // Auto-verify OTP when 6 digits are entered
+  // Auto-verify OTP when 6 digits are entered (Does NOT auto start charging)
   useEffect(() => {
     const verifyOtp = async () => {
-      if (otp.length === 6 && (status === 'ARRIVING' || status === 'DRIVER_STARTED') && !isStarting) {
-        setIsStarting(true);
+      if (otp.length === 6 && !isOtpVerified && !otpVerifiedRef.current && !isVerifyingOtp) {
+        setIsVerifyingOtp(true);
         try {
-          await api.patch(`/bookings/${bookingId}/status`, {
-            status: 'OTP_VERIFIED',
-            otp
-          });
+          if (bookingId && bookingId !== 'mock-id') {
+            await api.patch(`/bookings/${bookingId}/status`, {
+              status: 'OTP_VERIFIED',
+              otp,
+            });
+          }
+          otpVerifiedRef.current = true;
+          setLocalStatus('OTP_VERIFIED');
         } catch (err: any) {
           console.error(err);
-          alert(err.response?.data?.message || 'Invalid OTP');
+          Alert.alert('Invalid OTP', err.response?.data?.message || 'The OTP entered does not match the customer OTP.');
           setOtp('');
         } finally {
-          setIsStarting(false);
+          setIsVerifyingOtp(false);
         }
       }
     };
     verifyOtp();
-  }, [otp, status]);
+  }, [otp, isOtpVerified]);
 
+  // Manual Start DC Charging Action (Triggered only by operator button tap after cable confirmation)
   const handleStart = async () => {
-    if (bookingId && bookingId !== 'mock-id') {
-      setIsStarting(true);
-      try {
+    if (!checklist.cable) {
+      Alert.alert('Cable Connection Required', 'Please plug in and lock the charging cable into the vehicle before starting charging.');
+      return;
+    }
+    setIsStarting(true);
+    try {
+      if (bookingId && bookingId !== 'mock-id') {
         await api.patch(`/bookings/${bookingId}/status`, {
-          status: 'CHARGING_STARTED'
+          status: 'CHARGING_STARTED',
         });
-      } catch (err: any) {
-        console.error(err);
-        alert(err.response?.data?.message || 'Error starting session');
-      } finally {
-        setIsStarting(false);
       }
-    } else {
-      navigation.navigate('LiveCharging', { bookingId });
+      navigation.navigate(isOperator ? 'ChargingControls' : 'LiveCharging', { bookingId });
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert('Charging Error', err.response?.data?.message || 'Error initializing charging session.');
+    } finally {
+      setIsStarting(false);
     }
   };
 
-  const togglePerimeter = () => {
-    setChecklist(prev => ({ ...prev, perimeter: !prev.perimeter }));
+  const toggleCable = () => {
+    setChecklist((prev) => ({ ...prev, cable: !prev.cable }));
   };
 
+  const togglePerimeter = () => {
+    setChecklist((prev) => ({ ...prev, perimeter: !prev.perimeter }));
+  };
+
+  const customerName =
+    bookingDetails?.personalInfo?.name ||
+    bookingDetails?.customerId?.name ||
+    bookingDetails?.customerName ||
+    'Customer';
+  const customerPhone =
+    bookingDetails?.personalInfo?.phone ||
+    bookingDetails?.customerId?.phone ||
+    bookingDetails?.customerPhone ||
+    bookingDetails?.userPhone ||
+    '';
+  const vehicleModel =
+    bookingDetails?.vehicleModel ||
+    bookingDetails?.vehicleDetails?.model ||
+    'Tata Nexon EV';
+  const connectorType = bookingDetails?.connectorType || 'CCS2';
+  const requestedKWh = bookingDetails?.requestedEnergyKWh || 30;
+
+  const canStartCharging = isOtpVerified && checklist.cable && checklist.perimeter && !isStarting;
+
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Top App Bar */}
+    <View style={[styles.container, { paddingTop: topInset }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
+      {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.avatarBox}>
-            <Image 
-              source={{ uri: isOperator 
-                ? 'https://lh3.googleusercontent.com/aida-public/AB6AXuBUhUHdkVi4TXl0RqamXISKJHyUqX13-G_auFfIcFf-gOyzlDKv2lprGPkrKF75lyV2ORH9OlRd5cckkCyvukYcPo1ywAQXCQ_yYf3_XJ0frbhGhW_kYFK0G7m3s0BY9okUJ5ESl99SHsPo4p1XiT76eb4his6yix-1APFjjxyfQUhY6uoMe5BcO3LUXPpN4wS_o8y_tjXum-6ECsqhb6QjgVU9Y4LESyBs6T_U0DeCtdGgQWW6aBsM8xR2b2zCi8hkKi0gntPclGI5'
-                : (bookingDetails?.operatorId?.profileImageUrl || 'https://lh3.googleusercontent.com/aida-public/AB6AXuDui1QNv4jKMbmBX59Ru5zSy9YFoxzvIKknM3LDFO9L0ctO2GFt0R7hl7q2m_0ZmxDgLGxhhTITkrefmWaTpIjWVtu0Lg-skqEk9qYxXztiQmRq--tCG59PkCVPq6-iiUK0OO30AkSusjiQiOlXBTFCyoLoGIrmhq37QqljDAHwLZEtXyx9wuVjAKufhKZ4JWiMTJD_d-JYQq9HPrdPBCOJxteaeYoph9kIEOs6EW0PvRAq1kk5U5R9O5v9L8K4Eb0RpzvjR0XDrcZK')
-              }}
-              style={styles.avatar}
-            />
-          </View>
-          <View>
-            <Text style={styles.headerSub}>{isOperator ? 'ACTIVE REQUEST' : 'OPERATOR ARRIVED'}</Text>
-            <Text style={styles.headerTitle}>
-              {isOperator 
-                ? (bookingDetails?.customerId?.name || 'Customer')
-                : (bookingDetails?.operatorId?.name || 'Operator')}
-            </Text>
-          </View>
-        </View>
-        <TouchableOpacity>
-          <Text style={styles.notificationIcon}>🔔</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={22} color="#0F172A" />
         </TouchableOpacity>
+        <View style={styles.headerTitleBox}>
+          <Text style={styles.headerSub}>
+            {isOperator ? 'SITE ARRIVAL & CHARGING SETUP' : 'OPERATOR ARRIVED'}
+          </Text>
+          <Text style={styles.headerTitle}>{isOperator ? customerName : 'VoltRescue Operator'}</Text>
+        </View>
+        <View style={styles.headerStatusDot} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 28) }]}
+        showsVerticalScrollIndicator={false}
+      >
         {!isOperator ? (
-          /* ==================================================
-             CUSTOMER VIEW
-          ================================================== */
+          /* Customer View */
           <View style={styles.customerContainer}>
             <View style={styles.customerHero}>
-              <Text style={styles.customerHeroTitle}>Rescue Van is Here!</Text>
-              <Text style={styles.customerHeroSub}>Please meet your operator at your vehicle to begin the charging session.</Text>
+              <View style={styles.iconCircleEmerald}>
+                <Ionicons name="flash" size={32} color="#059669" />
+              </View>
+              <Text style={styles.customerHeroTitle}>Rescue Van Has Arrived! 🎉</Text>
+              <Text style={styles.customerHeroSub}>
+                Please meet your rescue technician at your vehicle and share your 6-digit PIN to begin charging.
+              </Text>
             </View>
 
-            {status === 'OTP_VERIFIED' ? (
+            {/* Operator Card with Direct Contact */}
+            <View style={styles.operatorContactCard}>
+              <View style={styles.operatorInfoLeft}>
+                <View style={styles.operatorAvatarBox}>
+                  <Ionicons name="person" size={24} color="#059669" />
+                </View>
+                <View style={{ marginLeft: 12 }}>
+                  <Text style={styles.operatorName}>
+                    {bookingDetails?.operatorId?.name || 'VoltRescue Technician'}
+                  </Text>
+                  <Text style={styles.operatorVehicle}>
+                    {bookingDetails?.operatorId?.vehicleDetails?.model || 'Mobile Fast Charger Van #4'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.operatorActions}>
+                <TouchableOpacity
+                  style={styles.actionBtnCircle}
+                  onPress={() => {
+                    const phone = bookingDetails?.operatorId?.phone || '1800123456';
+                    Linking.openURL(`tel:${phone}`);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="call" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* 6-Digit OTP Box */}
+            {isOtpVerified ? (
               <View style={styles.otpSuccessCard}>
-                <Text style={styles.otpSuccessIcon}>✅</Text>
-                <Text style={styles.otpSuccessTitle}>Identity Verified</Text>
-                <Text style={styles.otpSuccessDesc}>Operator is completing safety checks and preparing to start the charge.</Text>
+                <View style={styles.successIconBox}>
+                  <Ionicons name="checkmark-circle" size={36} color="#059669" />
+                </View>
+                <Text style={styles.otpSuccessTitle}>Identity & Safety Verified</Text>
+                <Text style={styles.otpSuccessDesc}>
+                  Technician is connecting the high-voltage cable and initializing rapid DC charging...
+                </Text>
               </View>
             ) : (
-              <View style={styles.otpDisplayCard}>
-                <Text style={styles.otpDisplayLabel}>YOUR SECURE OTP</Text>
-                <Text style={styles.otpDisplayValue}>{bookingDetails?.otp || '----'}</Text>
-                <Text style={styles.otpDisplayDesc}>Share this 6-digit code with the operator to verify your identity and start charging.</Text>
+              <View style={styles.otpCard}>
+                <Text style={styles.otpCardLabel}>YOUR 6-DIGIT RESCUE PIN</Text>
+                <View style={styles.otpDigitRow}>
+                  {(bookingDetails?.otp || '171723').split('').map((digit: string, idx: number) => (
+                    <View key={idx} style={styles.otpDigitBox}>
+                      <Text style={styles.otpDigitLarge}>{digit}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={styles.otpDisplayDesc}>
+                  Provide this 6-digit PIN to the operator before connecting the charging cable.
+                </Text>
               </View>
             )}
 
             <View style={styles.waitingBox}>
-              <ActivityIndicator size="large" color={colors.secondaryFixed} />
+              <ActivityIndicator size="small" color="#059669" />
               <Text style={styles.waitingBoxText}>
-                {status === 'OTP_VERIFIED' ? 'Waiting for operator to begin charge...' : 'Waiting for operator to verify OTP...'}
+                {isOtpVerified
+                  ? 'Technician connecting high-voltage cable...'
+                  : 'Waiting for operator to enter your OTP...'}
               </Text>
             </View>
           </View>
         ) : (
-          /* ==================================================
-             OPERATOR VIEW
-          ================================================== */
+          /* Operator View */
           <View style={styles.operatorContainer}>
-            <View style={styles.statusCard}>
-              <View style={styles.statusRow}>
-                <View>
-                  <Text style={styles.statusTitle}>Arrived at Location</Text>
-                  <Text style={styles.statusDesc}>Ready to initiate high-speed charging.</Text>
+            {/* Customer & EV Info Card */}
+            <View style={styles.customerCard}>
+              <View style={styles.customerInfoLeft}>
+                <View style={styles.customerAvatarBox}>
+                  <Ionicons name="person" size={20} color="#059669" />
                 </View>
-                <View style={styles.locationIconBox}>
-                  <Text style={styles.locationIcon}>📍</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.customerNameText}>{customerName}</Text>
+                  <Text style={styles.customerVehicleText}>
+                    {vehicleModel} • {connectorType} ({requestedKWh} kWh DC)
+                  </Text>
                 </View>
               </View>
-              <View style={styles.calibrationRow}>
-                <View style={styles.calibrationDot} />
-                <Text style={styles.calibrationText}>SYSTEM CALIBRATED</Text>
-              </View>
+
+              {customerPhone ? (
+                <TouchableOpacity
+                  style={styles.callButtonSmall}
+                  onPress={() => Linking.openURL(`tel:${customerPhone}`)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="call" size={16} color="#FFFFFF" />
+                  <Text style={styles.callButtonText}>Call</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
 
-            <View style={styles.vehicleCard}>
-              <View style={styles.vehicleInfoRow}>
-                <View>
-                  <Text style={styles.infoLabel}>CONNECTOR</Text>
-                  <Text style={styles.infoValue}>{bookingDetails?.connectorType || 'CCS2'}</Text>
+            {/* Step 1: Customer OTP Verification */}
+            <View style={styles.stepCard}>
+              <View style={styles.stepHeader}>
+                <View style={[styles.stepNumberBadge, isOtpVerified && { backgroundColor: '#059669' }]}>
+                  <Text style={styles.stepNumberText}>{isOtpVerified ? '✓' : '1'}</Text>
                 </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.infoLabel}>REQ ENERGY</Text>
-                  <Text style={styles.infoValueError}>{bookingDetails?.requestedEnergyKWh || 0} kWh</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.stepTitle}>CUSTOMER OTP PIN VERIFICATION</Text>
+                  <Text style={styles.stepSub}>
+                    {isOtpVerified ? 'Identity verified successfully' : 'Ask customer for their 6-digit PIN'}
+                  </Text>
                 </View>
               </View>
-            </View>
 
-            <View style={styles.actionArea}>
-              
-              {status === 'OTP_VERIFIED' ? (
-                <View style={styles.otpVerifiedContainer}>
-                  <Text style={styles.otpSuccessIconLarge}>✅</Text>
-                  <Text style={styles.otpVerifiedText}>OTP Verified Successfully</Text>
+              {isOtpVerified ? (
+                <View style={styles.otpVerifiedBanner}>
+                  <Ionicons name="shield-checkmark" size={20} color="#059669" />
+                  <Text style={styles.otpVerifiedBannerText}>
+                    PIN Verified: {bookingDetails?.otp || otp || 'Verified'}
+                  </Text>
                 </View>
               ) : (
                 <View style={styles.otpInputContainer}>
-                  <Text style={styles.otpInputLabel}>Customer OTP Required</Text>
-                  
                   <View style={styles.otpBoxesWrapper}>
                     {[0, 1, 2, 3, 4, 5].map((index) => (
-                      <View 
-                        key={index} 
+                      <View
+                        key={index}
                         style={[
-                          styles.otpBox, 
+                          styles.otpBox,
                           otp.length === index && styles.otpBoxActive,
-                          otp.length > index && styles.otpBoxFilled
+                          otp.length > index && styles.otpBoxFilled,
                         ]}
                       >
-                        <Text style={styles.otpBoxText}>
-                          {otp[index] ? otp[index] : '•'}
-                        </Text>
+                        <Text style={styles.otpBoxText}>{otp[index] ? otp[index] : '•'}</Text>
                       </View>
                     ))}
-                    
-                    {/* Hidden input overlaying the boxes to capture native keyboard events naturally */}
                     <TextInput
                       style={styles.hiddenOtpInput}
                       keyboardType="numeric"
@@ -233,470 +371,585 @@ const StartChargingScreen = ({ route, navigation }: any) => {
                       value={otp}
                       onChangeText={setOtp}
                       caretHidden={true}
-                      autoFocus={false}
-                      editable={!isStarting}
+                      editable={!isVerifyingOtp}
                     />
                   </View>
+                  {isVerifyingOtp && (
+                    <View style={styles.verifyingRow}>
+                      <ActivityIndicator size="small" color="#059669" />
+                      <Text style={styles.verifyingText}>Verifying PIN...</Text>
+                    </View>
+                  )}
                 </View>
               )}
+            </View>
 
-              {/* Only show checklist and start button once OTP is verified */}
-              <View style={[styles.checklist, status !== 'OTP_VERIFIED' && { opacity: 0.3 }]} pointerEvents={status === 'OTP_VERIFIED' ? 'auto' : 'none'}>
-                <View style={[styles.checklistItem, styles.checklistActive]}>
-                  <View style={styles.checkIconBoxActive}>
-                    <Text style={styles.checkIconActive}>🔗</Text>
-                  </View>
-                  <View style={styles.checkTextContent}>
-                    <Text style={styles.checkTitle}>Secure cable connection</Text>
-                    <Text style={styles.checkDesc}>Ensure plug is fully engaged</Text>
-                  </View>
-                  <Text style={styles.checkStatusIconActive}>✓</Text>
+            {/* Step 2: Physical Cable & Safety Check (Human in the loop) */}
+            <View style={[styles.stepCard, !isOtpVerified && { opacity: 0.45 }]}>
+              <View style={styles.stepHeader}>
+                <View style={[styles.stepNumberBadge, checklist.cable && { backgroundColor: '#059669' }]}>
+                  <Text style={styles.stepNumberText}>{checklist.cable ? '✓' : '2'}</Text>
                 </View>
-
-                <TouchableOpacity 
-                  style={[styles.checklistItem, checklist.perimeter ? styles.checklistActive : styles.checklistInactive]}
-                  onPress={togglePerimeter}
-                >
-                  <View style={checklist.perimeter ? styles.checkIconBoxActive : styles.checkIconBoxInactive}>
-                    <Text style={checklist.perimeter ? styles.checkIconActive : styles.checkIconInactive}>🛡️</Text>
-                  </View>
-                  <View style={styles.checkTextContent}>
-                    <Text style={styles.checkTitle}>Safety perimeter clear</Text>
-                    <Text style={styles.checkDesc}>No obstructions within 2 meters</Text>
-                  </View>
-                  <Text style={checklist.perimeter ? styles.checkStatusIconActive : styles.checkStatusIconInactive}>
-                    {checklist.perimeter ? '✓' : '○'}
-                  </Text>
-                </TouchableOpacity>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.stepTitle}>PHYSICAL CABLE & SAFETY LOCK</Text>
+                  <Text style={styles.stepSub}>Connect charging gun and confirm security</Text>
+                </View>
               </View>
 
-              <View style={styles.startOuterBox}>
-                <Animated.View style={[styles.startPulse, {
-                  transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.2] }) }],
-                  opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] })
-                }]} />
-                <TouchableOpacity 
-                  style={[styles.startButton, (!checklist.perimeter || status !== 'OTP_VERIFIED') && { opacity: 0.5 }]} 
-                  onPress={handleStart}
-                  disabled={isStarting || !checklist.perimeter || status !== 'OTP_VERIFIED'}
-                >
-                  <Text style={styles.startIcon}>{isStarting ? '🔄' : '⚡'}</Text>
-                  <Text style={styles.startText}>{isStarting ? 'WAIT...' : 'START'}</Text>
-                  {!isStarting && <Text style={styles.startSub}>SESSION</Text>}
-                </TouchableOpacity>
-              </View>
+              {/* Cable Checkbox */}
+              <TouchableOpacity
+                style={[
+                  styles.checklistItem,
+                  checklist.cable ? styles.checklistItemActive : styles.checklistItemInactive,
+                ]}
+                onPress={toggleCable}
+                disabled={!isOtpVerified}
+                activeOpacity={0.7}
+              >
+                <View style={checklist.cable ? styles.checkIconBoxActive : styles.checkIconBoxInactive}>
+                  <Ionicons name="link" size={18} color={checklist.cable ? '#059669' : '#94A3B8'} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.checkTitle}>Charging cable connected & locked</Text>
+                  <Text style={styles.checkDesc}>High-voltage gun firmly engaged in vehicle port</Text>
+                </View>
+                <Ionicons
+                  name={checklist.cable ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={24}
+                  color={checklist.cable ? '#059669' : '#CBD5E1'}
+                />
+              </TouchableOpacity>
+
+              {/* Safety Perimeter Checkbox */}
+              <TouchableOpacity
+                style={[
+                  styles.checklistItem,
+                  checklist.perimeter ? styles.checklistItemActive : styles.checklistItemInactive,
+                ]}
+                onPress={togglePerimeter}
+                disabled={!isOtpVerified}
+                activeOpacity={0.7}
+              >
+                <View style={checklist.perimeter ? styles.checkIconBoxActive : styles.checkIconBoxInactive}>
+                  <Ionicons name="shield-checkmark" size={18} color={checklist.perimeter ? '#059669' : '#94A3B8'} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.checkTitle}>Safety perimeter clear</Text>
+                  <Text style={styles.checkDesc}>Vehicle in Park/Neutral, no nearby hazard</Text>
+                </View>
+                <Ionicons
+                  name={checklist.perimeter ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={24}
+                  color={checklist.perimeter ? '#059669' : '#CBD5E1'}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Step 3: Explicit Manual Action Button */}
+            <View style={styles.actionContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.startChargingButton,
+                  !canStartCharging && styles.startChargingButtonDisabled,
+                ]}
+                onPress={handleStart}
+                disabled={!canStartCharging}
+                activeOpacity={0.88}
+              >
+                {isStarting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="flash" size={22} color="#FFFFFF" />
+                    <Text style={styles.startChargingButtonText}>START RAPID DC CHARGING</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {!isOtpVerified ? (
+                <Text style={styles.safetyHint}>🔒 Enter customer 6-digit OTP to unlock charging</Text>
+              ) : !checklist.cable ? (
+                <Text style={styles.safetyHint}>⚠️ Please confirm the charging cable is connected</Text>
+              ) : (
+                <Text style={styles.safetyHintReady}>⚡ All safety checks cleared. Ready to charge.</Text>
+              )}
             </View>
           </View>
         )}
-
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F8FAFC',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    paddingTop: 50,
-    backgroundColor: 'rgba(19, 19, 19, 0.8)',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomColor: '#E2E8F0',
   },
-  headerLeft: {
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  headerTitleBox: {
+    alignItems: 'center',
+  },
+  headerSub: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
+    letterSpacing: 0.8,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  headerStatusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#059669',
+  },
+  scrollContent: {
+    padding: 16,
+    gap: 14,
+  },
+
+  // Customer View Styles
+  customerContainer: {
+    gap: 14,
+  },
+  customerHero: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 22,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  iconCircleEmerald: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#A7F3D0',
+  },
+  customerHeroTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 6,
+  },
+  customerHeroSub: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  operatorContactCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  operatorInfoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  operatorAvatarBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+  },
+  operatorName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  operatorVehicle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  operatorActions: {
+    marginLeft: 10,
+  },
+  actionBtnCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#059669',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpCard: {
+    backgroundColor: '#0F172A',
+    borderRadius: 22,
+    padding: 20,
+    alignItems: 'center',
+  },
+  otpCardLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#10B981',
+    letterSpacing: 0.8,
+    marginBottom: 14,
+  },
+  otpDigitRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  otpDigitBox: {
+    width: 44,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+  },
+  otpDigitLarge: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  otpDisplayDesc: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textAlign: 'center',
+  },
+  otpSuccessCard: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+  },
+  successIconBox: {
+    marginBottom: 8,
+  },
+  otpSuccessTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#065F46',
+    marginBottom: 4,
+  },
+  otpSuccessDesc: {
+    fontSize: 13,
+    color: '#047857',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  waitingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  waitingBoxText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+
+  // Operator View Styles
+  operatorContainer: {
+    gap: 14,
+  },
+  customerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  customerInfoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  customerAvatarBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+  },
+  customerNameText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  customerVehicleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  callButtonSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#059669',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  callButtonText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+
+  // Step Cards
+  stepCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+    gap: 12,
+  },
+  stepHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  avatarBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(173,198,255,0.2)',
-    overflow: 'hidden',
-  },
-  avatar: {
-    width: '100%',
-    height: '100%',
-  },
-  headerSub: {
-    color: colors.onSurfaceVariant,
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-  headerTitle: {
-    color: colors.primary,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  notificationIcon: {
-    fontSize: 24,
-    color: colors.primary,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  /* Customer Styles */
-  customerContainer: {
-    gap: 24,
-    paddingTop: 20,
-  },
-  customerHero: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  customerHeroTitle: {
-    color: colors.onSurface,
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  customerHeroSub: {
-    color: colors.onSurfaceVariant,
-    fontSize: 14,
-    textAlign: 'center',
-    maxWidth: '80%',
-    lineHeight: 20,
-  },
-  otpDisplayCard: {
-    backgroundColor: 'rgba(47, 248, 1, 0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(47, 248, 1, 0.3)',
-    borderRadius: 20,
-    padding: 32,
-    alignItems: 'center',
-  },
-  otpDisplayLabel: {
-    color: colors.secondaryFixed,
-    fontSize: 12,
-    fontWeight: 'bold',
-    letterSpacing: 2,
-    marginBottom: 16,
-  },
-  otpDisplayValue: {
-    color: '#fff',
-    fontSize: 48,
-    fontWeight: 'bold',
-    letterSpacing: 10,
-    marginBottom: 16,
-  },
-  otpDisplayDesc: {
-    color: colors.onSurfaceVariant,
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  otpSuccessCard: {
-    backgroundColor: 'rgba(47, 248, 1, 0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(47, 248, 1, 0.3)',
-    borderRadius: 20,
-    padding: 32,
-    alignItems: 'center',
-  },
-  otpSuccessIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  otpSuccessTitle: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  otpSuccessDesc: {
-    color: colors.onSurfaceVariant,
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  waitingBox: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(32, 31, 31, 0.8)',
-    borderRadius: 16,
-    padding: 24,
+  stepNumberBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#0F172A',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-    marginTop: 20,
   },
-  waitingBoxText: {
-    color: colors.onSurfaceVariant,
-    fontSize: 14,
-    fontWeight: '600',
+  stepNumberText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
   },
-  /* Operator Styles */
-  operatorContainer: {
-    gap: 24,
+  stepTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#64748B',
+    letterSpacing: 0.6,
   },
-  statusCard: {
-    backgroundColor: 'rgba(32,31,31,0.8)',
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+  stepSub: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 1,
   },
-  statusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  statusTitle: {
-    color: colors.secondaryContainer,
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  statusDesc: {
-    color: colors.onSurfaceVariant,
-    fontSize: 14,
-    marginTop: 4,
-  },
-  locationIconBox: {
-    backgroundColor: 'rgba(47,248,1,0.1)',
-    padding: 8,
-    borderRadius: 8,
-  },
-  locationIcon: {
-    fontSize: 20,
-  },
-  calibrationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 16,
-  },
-  calibrationDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.secondaryContainer,
-  },
-  calibrationText: {
-    color: colors.secondaryContainer,
-    fontSize: 12,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-  vehicleCard: {
-    backgroundColor: 'rgba(32,31,31,0.8)',
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  vehicleInfoRow: {
-    padding: 24,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  infoLabel: {
-    color: colors.onSurfaceVariant,
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  infoValue: {
-    color: colors.primary,
-    fontSize: 24,
-    fontWeight: 'bold',
-    letterSpacing: 2,
-  },
-  infoValueError: {
-    color: colors.error,
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  actionArea: {
-    alignItems: 'center',
-    gap: 32,
-    paddingVertical: 16,
-  },
-  otpVerifiedContainer: {
-    backgroundColor: 'rgba(47, 248, 1, 0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(47, 248, 1, 0.3)',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    width: '100%',
-  },
-  otpSuccessIconLarge: {
-    fontSize: 48,
-    marginBottom: 8,
-  },
-  otpVerifiedText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
+
+  // OTP Input Boxes
   otpInputContainer: {
-    width: '100%',
     alignItems: 'center',
-    backgroundColor: 'rgba(32,31,31,0.5)',
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(173,198,255,0.1)',
-  },
-  otpInputLabel: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    letterSpacing: 1,
+    marginTop: 4,
   },
   otpBoxesWrapper: {
     flexDirection: 'row',
     gap: 8,
     position: 'relative',
-    justifyContent: 'center',
-    width: '100%',
   },
   otpBox: {
     width: 44,
-    height: 56,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    height: 52,
     borderRadius: 12,
-    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
     alignItems: 'center',
-  },
-  otpBoxFilled: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(173,198,255,0.05)',
+    justifyContent: 'center',
   },
   otpBoxActive: {
-    borderColor: colors.secondaryContainer,
-    borderWidth: 2,
-    backgroundColor: 'rgba(47,248,1,0.05)',
+    borderColor: '#059669',
+    backgroundColor: '#FFFFFF',
+  },
+  otpBoxFilled: {
+    borderColor: '#059669',
+    backgroundColor: '#ECFDF5',
   },
   otpBoxText: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0F172A',
   },
   hiddenOtpInput: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0,
-    color: 'transparent',
-    fontSize: 1, // to keep it rendering on screen but invisible
-  },
-  startOuterBox: {
-    width: 180,
-    height: 180,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-    marginTop: 16,
-  },
-  startPulse: {
     position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    borderWidth: 20,
-    borderColor: colors.secondaryContainer,
-  },
-  startButton: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: colors.secondaryContainer,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: colors.secondaryContainer,
-    shadowOpacity: 0.6,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  startIcon: {
-    fontSize: 40,
-    color: colors.onSecondaryContainer,
-    marginBottom: 8,
-  },
-  startText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.onSecondaryContainer,
-  },
-  startSub: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: 'rgba(15, 109, 0, 0.8)',
-    letterSpacing: 2,
-    marginTop: 4,
-  },
-  checklist: {
     width: '100%',
-    gap: 12,
+    height: '100%',
+    opacity: 0,
   },
+  verifyingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  verifyingText: {
+    fontSize: 12,
+    color: '#059669',
+    fontWeight: '700',
+  },
+  otpVerifiedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#ECFDF5',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  otpVerifiedBannerText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+
+  // Checklist
   checklistItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(32,31,31,0.8)',
-    padding: 16,
-    borderRadius: 16,
-    borderLeftWidth: 4,
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
   },
-  checklistActive: {
-    borderLeftColor: colors.secondaryContainer,
+  checklistItemActive: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
   },
-  checklistInactive: {
-    borderLeftColor: 'rgba(173,198,255,0.4)',
+  checklistItemInactive: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
   },
   checkIconBoxActive: {
-    backgroundColor: 'rgba(47,248,1,0.2)',
-    padding: 8,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#D1FAE5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   checkIconBoxInactive: {
-    backgroundColor: 'rgba(173,198,255,0.2)',
-    padding: 8,
-    borderRadius: 20,
-  },
-  checkIconActive: {
-    fontSize: 20,
-  },
-  checkIconInactive: {
-    fontSize: 20,
-  },
-  checkTextContent: {
-    flex: 1,
-    marginLeft: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   checkTitle: {
-    color: colors.onSurface,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
   },
   checkDesc: {
-    color: colors.onSurfaceVariant,
-    fontSize: 12,
+    fontSize: 11,
+    color: '#64748B',
     marginTop: 2,
   },
-  checkStatusIconActive: {
-    fontSize: 24,
-    color: colors.secondaryContainer,
-    fontWeight: 'bold',
+
+  // Action Button
+  actionContainer: {
+    gap: 8,
+    marginTop: 4,
   },
-  checkStatusIconInactive: {
-    fontSize: 24,
-    color: colors.primary,
-  }
+  startChargingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#059669',
+    borderRadius: 18,
+    paddingVertical: 18,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  startChargingButtonDisabled: {
+    backgroundColor: '#94A3B8',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  startChargingButtonText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.8,
+  },
+  safetyHint: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    textAlign: 'center',
+  },
+  safetyHintReady: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#059669',
+    textAlign: 'center',
+  },
 });
 
 export default StartChargingScreen;

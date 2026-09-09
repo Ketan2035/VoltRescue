@@ -10,8 +10,12 @@ import { v4 as uuidv4 } from 'uuid';
 
 export const registerOperator = async (data) => {
   const { name, email, phone, password, vehicleDetails } = data;
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanPhone = phone.trim();
 
-  const existingOperator = await Operator.findOne({ $or: [{ email }, { phone }] });
+  const existingOperator = await Operator.findOne({
+    $or: [{ email: cleanEmail }, { phone: cleanPhone }],
+  });
   if (existingOperator) {
     throw new AppError(400, 'Operator already exists with this email or phone');
   }
@@ -20,11 +24,16 @@ export const registerOperator = async (data) => {
   const passwordHash = await bcrypt.hash(password, salt);
 
   const operator = await Operator.create({
-    name,
-    email,
-    phone,
+    name: name.trim(),
+    email: cleanEmail,
+    phone: cleanPhone,
     passwordHash,
-    vehicleDetails,
+    vehicleDetails: vehicleDetails || {
+      make: 'VoltRescue',
+      model: 'Custom Van',
+      capacityKWh: 80,
+      supportedConnectors: ['CCS2', 'CHAdeMO', 'Type2'],
+    },
   });
 
   // Create default availability for the new operator
@@ -35,10 +44,10 @@ export const registerOperator = async (data) => {
     breakHours: { start: '12:00', end: '13:00' },
     holidays: [],
     unavailableDates: [],
-    maximumBookingsPerDay: 50
+    maximumBookingsPerDay: 50,
   });
 
-  const token = jwt.sign({ id: operator._id }, env.JWT_SECRET, {
+  const token = jwt.sign({ id: operator._id, role: 'operator' }, env.JWT_SECRET, {
     expiresIn: env.JWT_EXPIRES_IN,
   });
 
@@ -48,17 +57,18 @@ export const registerOperator = async (data) => {
 };
 
 export const loginOperator = async (email, password) => {
-  const operator = await Operator.findOne({ email }).select('+passwordHash');
+  const cleanEmail = email.trim().toLowerCase();
+  const operator = await Operator.findOne({ email: cleanEmail }).select('+passwordHash');
   if (!operator) {
-    throw new AppError(401, 'Invalid credentials');
+    throw new AppError(401, 'Invalid email or password');
   }
 
   const isMatch = await bcrypt.compare(password, operator.passwordHash);
   if (!isMatch) {
-    throw new AppError(401, 'Invalid credentials');
+    throw new AppError(401, 'Invalid email or password');
   }
 
-  const token = jwt.sign({ id: operator._id }, env.JWT_SECRET, {
+  const token = jwt.sign({ id: operator._id, role: 'operator' }, env.JWT_SECRET, {
     expiresIn: env.JWT_EXPIRES_IN,
   });
 
@@ -69,8 +79,12 @@ export const loginOperator = async (email, password) => {
 
 export const registerCustomer = async (data) => {
   const { name, email, phone, password } = data;
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanPhone = phone.trim();
 
-  const existingCustomer = await Customer.findOne({ $or: [{ email }, { phone }] });
+  const existingCustomer = await Customer.findOne({
+    $or: [{ email: cleanEmail }, { phone: cleanPhone }],
+  });
   if (existingCustomer) {
     throw new AppError(400, 'Customer already exists with this email or phone');
   }
@@ -79,9 +93,9 @@ export const registerCustomer = async (data) => {
   const passwordHash = await bcrypt.hash(password, salt);
 
   const customer = await Customer.create({
-    name,
-    email,
-    phone,
+    name: name.trim(),
+    email: cleanEmail,
+    phone: cleanPhone,
     passwordHash,
   });
 
@@ -95,14 +109,15 @@ export const registerCustomer = async (data) => {
 };
 
 export const loginCustomer = async (email, password) => {
-  const customer = await Customer.findOne({ email }).select('+passwordHash');
+  const cleanEmail = email.trim().toLowerCase();
+  const customer = await Customer.findOne({ email: cleanEmail }).select('+passwordHash');
   if (!customer) {
-    throw new AppError(401, 'Invalid credentials');
+    throw new AppError(401, 'Invalid email or password');
   }
 
   const isMatch = await bcrypt.compare(password, customer.passwordHash);
   if (!isMatch) {
-    throw new AppError(401, 'Invalid credentials');
+    throw new AppError(401, 'Invalid email or password');
   }
 
   const token = jwt.sign({ id: customer._id, role: 'customer' }, env.JWT_SECRET, {
@@ -134,5 +149,13 @@ export const createGuestSession = async (deviceId, fcmToken) => {
   }
 
   return session;
+};
+
+export const getCustomerProfile = async (customerId) => {
+  const customer = await Customer.findById(customerId);
+  if (!customer) {
+    throw new AppError(404, 'Customer not found');
+  }
+  return customer;
 };
 

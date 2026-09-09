@@ -1,10 +1,13 @@
 export const calculatePrice = (
-  requestedEnergyKWh,
-  travelDistanceKm,
-  connectorType,
-  chargingType,
+  requestedEnergyKWh = 20,
+  travelDistanceKm = 5,
+  connectorType = 'CCS2',
+  chargingType = 'Fast',
   couponCode = null
 ) => {
+  const energy = Number(requestedEnergyKWh) || 20;
+  const distance = Number(travelDistanceKm) || 5;
+
   // Base rates
   const baseFare = 50; // Flat fee
   const energyRatePerKWh = chargingType === 'Fast' ? 25 : 15;
@@ -15,8 +18,8 @@ export const calculatePrice = (
   if (connectorType === 'CCS2') connectorFee = 20;
   if (connectorType === 'CHAdeMO') connectorFee = 15;
   
-  const energyCost = requestedEnergyKWh * energyRatePerKWh;
-  const travelCharge = travelDistanceKm * travelRatePerKm;
+  const energyCost = energy * energyRatePerKWh;
+  const travelCharge = distance * travelRatePerKm;
   
   // Dynamic pricing (Night charge / Peak hour)
   const currentHour = new Date().getHours();

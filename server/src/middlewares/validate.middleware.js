@@ -21,7 +21,13 @@ export const validate = (schema) => (req, res, next) => {
     if (error instanceof z.ZodError) {
       // Zod v4 uses error.issues; older versions used error.errors — support both
       const issues = error.issues ?? error.errors ?? [];
-      const messages = issues.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ');
+      const messages = issues
+        .map((e) => {
+          const path = e.path.filter((p) => p !== 'body' && p !== 'query' && p !== 'params').join('.');
+          const field = path ? path.charAt(0).toUpperCase() + path.slice(1) : 'Field';
+          return `${field}: ${e.message}`;
+        })
+        .join(', ');
       return next(new AppError(400, `Validation Error: ${messages}`));
     }
     next(error);

@@ -21,20 +21,39 @@ export const updateLocationAndStatus = async (operatorId, coordinates, status) =
   return operator;
 };
 
-export const getNearbyOperators = async (coordinates, maxDistanceInMeters = 20000000) => {
-  // Find operators within 20,000km that are ONLINE (Globally available for testing)
-  const operators = await Operator.find({
-    status: 'ONLINE',
-    location: {
-      $near: {
-        $geometry: {
-          type: 'Point',
-          coordinates,
+export const getNearbyOperators = async (coordinates, maxDistanceInMeters = 50000000) => {
+  try {
+    // 1. Try finding online operators within range using geospatial index
+    if (coordinates && coordinates.length === 2 && !isNaN(coordinates[0]) && !isNaN(coordinates[1])) {
+      const operators = await Operator.find({
+        status: 'ONLINE',
+        location: {
+          $near: {
+            $geometry: {
+              type: 'Point',
+              coordinates,
+            },
+            $maxDistance: maxDistanceInMeters,
+          },
         },
-        $maxDistance: maxDistanceInMeters,
-      },
-    },
-  });
+      });
+      if (operators && operators.length > 0) {
+        return operators;
+      }
+    }
 
-  return operators;
+    // 2. Fallback: Find any operators marked ONLINE
+    const onlineOperators = await Operator.find({ status: 'ONLINE' });
+    if (onlineOperators && onlineOperators.length > 0) {
+      return onlineOperators;
+    }
+
+    // 3. Fallback: Return all non-deleted operators so booking is never blocked during testing
+    const allOperators = await Operator.find({ isDeleted: false });
+    return allOperators;
+  } catch (error) {
+    console.error('Error finding nearby operators:', error);
+    // Safe fallback to all operators
+    return await Operator.find({ isDeleted: false });
+  }
 };

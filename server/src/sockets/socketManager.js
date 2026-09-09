@@ -45,6 +45,24 @@ export const initSocketManager = (server) => {
       console.log(`Socket ${socket.id} auto-joined: ${operatorRoom}`);
     }
 
+    socket.on('register_operator', (tokenOrId) => {
+      try {
+        let opId = tokenOrId;
+        if (tokenOrId && typeof tokenOrId === 'string' && tokenOrId.includes('.')) {
+          const decoded = jwt.verify(tokenOrId, env.JWT_SECRET);
+          opId = decoded.id;
+        }
+        if (opId) {
+          socket.operatorId = opId;
+          socket.isOperator = true;
+          socket.join(`operator_${opId}`);
+          console.log(`Socket ${socket.id} explicitly registered operator room: operator_${opId}`);
+        }
+      } catch (e) {
+        console.error('Error registering operator on socket:', e.message);
+      }
+    });
+
     socket.on('join_room', (room) => {
       socket.join(room);
       console.log(`Socket ${socket.id} joined room: ${room}`);

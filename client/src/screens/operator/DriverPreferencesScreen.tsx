@@ -1,197 +1,222 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Switch, Platform, StatusBar } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Switch,
+  StatusBar,
+  Platform,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 
 const DriverPreferencesScreen = ({ navigation }: any) => {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0) + 6;
   const [pushNotifications, setPushNotifications] = useState(true);
   const [soundAlerts, setSoundAlerts] = useState(true);
   const [autoNavigate, setAutoNavigate] = useState(false);
-  const [darkMode, setDarkMode] = useState(true);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: topInset }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={22} color="#0F172A" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Preferences</Text>
+        <Text style={styles.headerTitle}>Operator Preferences</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 24) }]} showsVerticalScrollIndicator={false}>
+        {/* Section: Notifications */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notifications</Text>
-          
+          <Text style={styles.sectionTitle}>Dispatch Notifications</Text>
+
           <View style={styles.preferenceItem}>
             <View style={styles.preferenceLeft}>
-              <View style={styles.iconBg}>
-                <Ionicons name="notifications-outline" size={20} color="#fff" />
+              <View style={[styles.iconBg, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="notifications-outline" size={20} color="#2563EB" />
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.preferenceTitle}>Push Notifications</Text>
-                <Text style={styles.preferenceSub}>Receive alerts for new dispatches</Text>
+                <Text style={styles.preferenceSub}>Receive real-time alerts for new rescue requests</Text>
               </View>
             </View>
             <Switch
               value={pushNotifications}
               onValueChange={setPushNotifications}
-              trackColor={{ false: '#333', true: colors.secondaryContainer }}
-              thumbColor="#fff"
+              trackColor={{ false: '#E2E8F0', true: '#059669' }}
+              thumbColor="#FFFFFF"
             />
           </View>
 
           <View style={styles.preferenceItem}>
             <View style={styles.preferenceLeft}>
-              <View style={styles.iconBg}>
-                <Ionicons name="volume-high-outline" size={20} color="#fff" />
+              <View style={[styles.iconBg, { backgroundColor: '#ECFDF5' }]}>
+                <Ionicons name="volume-high-outline" size={20} color="#059669" />
               </View>
-              <View>
-                <Text style={styles.preferenceTitle}>Sound Alerts</Text>
-                <Text style={styles.preferenceSub}>Play loud siren on incoming job</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.preferenceTitle}>Emergency Siren Alert</Text>
+                <Text style={styles.preferenceSub}>Play urgent audible chime on incoming dispatch</Text>
               </View>
             </View>
             <Switch
               value={soundAlerts}
               onValueChange={setSoundAlerts}
-              trackColor={{ false: '#333', true: colors.secondaryContainer }}
-              thumbColor="#fff"
+              trackColor={{ false: '#E2E8F0', true: '#059669' }}
+              thumbColor="#FFFFFF"
             />
           </View>
         </View>
 
+        {/* Section: App Behavior */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>App Behavior</Text>
-          
+          <Text style={styles.sectionTitle}>Navigation & Operations</Text>
+
           <View style={styles.preferenceItem}>
             <View style={styles.preferenceLeft}>
-              <View style={styles.iconBg}>
-                <Ionicons name="navigate-outline" size={20} color="#fff" />
+              <View style={[styles.iconBg, { backgroundColor: '#FEF3C7' }]}>
+                <Ionicons name="navigate-outline" size={20} color="#D97706" />
               </View>
-              <View>
-                <Text style={styles.preferenceTitle}>Auto-Navigation</Text>
-                <Text style={styles.preferenceSub}>Open maps immediately on accept</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.preferenceTitle}>Auto-Launch Google Maps</Text>
+                <Text style={styles.preferenceSub}>Open turn-by-turn directions immediately upon accept</Text>
               </View>
             </View>
             <Switch
               value={autoNavigate}
               onValueChange={setAutoNavigate}
-              trackColor={{ false: '#333', true: colors.secondaryContainer }}
-              thumbColor="#fff"
-            />
-          </View>
-          
-          <View style={styles.preferenceItem}>
-            <View style={styles.preferenceLeft}>
-              <View style={styles.iconBg}>
-                <Ionicons name="moon-outline" size={20} color="#fff" />
-              </View>
-              <View>
-                <Text style={styles.preferenceTitle}>Dark Mode</Text>
-                <Text style={styles.preferenceSub}>Force dark UI theme</Text>
-              </View>
-            </View>
-            <Switch
-              value={darkMode}
-              onValueChange={setDarkMode}
-              trackColor={{ false: '#333', true: colors.secondaryContainer }}
-              thumbColor="#fff"
+              trackColor={{ false: '#E2E8F0', true: '#059669' }}
+              thumbColor="#FFFFFF"
             />
           </View>
         </View>
 
-        <TouchableOpacity style={styles.aboutButton}>
-          <Text style={styles.aboutButtonText}>About VoltRescue Operator App v1.0.0</Text>
-        </TouchableOpacity>
-
+        {/* App Info Card */}
+        <View style={styles.aboutCard}>
+          <Text style={styles.aboutTitle}>VoltRescue Fleet OS</Text>
+          <Text style={styles.aboutVersion}>Version 2.4.0 (Build 2026.09)</Text>
+          <Text style={styles.aboutSub}>High-Availability Mobile DC Fast Charging Network</Text>
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    backgroundColor: '#F8FAFC',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#1A1A1A',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: '#E2E8F0',
   },
   backBtn: {
     width: 40,
-    alignItems: 'flex-start',
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   headerTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: '#0F172A',
+    fontSize: 17,
+    fontWeight: '800',
   },
   scrollContent: {
     padding: 20,
     paddingBottom: 40,
   },
   section: {
-    marginBottom: 32,
+    marginBottom: 24,
   },
   sectionTitle: {
-    color: colors.secondaryContainer,
+    color: '#0F172A',
     fontSize: 14,
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 16,
+    fontWeight: '800',
+    marginBottom: 12,
+    letterSpacing: -0.2,
   },
   preferenceItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#FFFFFF',
     padding: 16,
-    borderRadius: 16,
-    marginBottom: 12,
+    borderRadius: 18,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   preferenceLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
     flex: 1,
+    marginRight: 10,
   },
   iconBg: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: '#2A2A2A',
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   preferenceTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
+    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
   },
   preferenceSub: {
-    color: '#888',
+    color: '#64748B',
     fontSize: 12,
+    lineHeight: 16,
   },
-  aboutButton: {
-    padding: 16,
+  aboutCard: {
     alignItems: 'center',
-    marginTop: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 12,
   },
-  aboutButtonText: {
-    color: '#666',
+  aboutTitle: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  aboutVersion: {
+    color: '#059669',
     fontSize: 12,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  aboutSub: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 4,
   },
 });
 

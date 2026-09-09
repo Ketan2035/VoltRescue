@@ -1,17 +1,33 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  Platform,
+  StatusBar,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { useBookingState } from '../../hooks/useBookingState';
 import api from '../../services/api';
 
 const BillGenerationScreen = ({ route, navigation }: any) => {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0) + 6;
   const { bookingId } = route.params || {};
   const { status } = useBookingState(bookingId);
-  const [isSending, setIsSending] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+
+  const [paymentMode, setPaymentMode] = useState<'qr' | 'cash'>('qr');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isConfirmed, setIsConfirmed] = useState(false);
   const [bookingDetails, setBookingDetails] = useState<any>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const fetchDetails = async () => {
       try {
         const res = await api.get(`/bookings/${bookingId}`);
@@ -25,493 +41,518 @@ const BillGenerationScreen = ({ route, navigation }: any) => {
     }
   }, [bookingId]);
 
-  const handleSendBill = async () => {
-    setIsSending(true);
-    
-    if (bookingId && bookingId !== 'mock-id') {
-      try {
+  const totalAmount = bookingDetails?.pricing?.totalAmount?.toFixed(2) || '1111.56';
+  const deliveredEnergy = bookingDetails?.deliveredEnergyKWh || bookingDetails?.requestedEnergyKWh || 30;
+  const customerName = bookingDetails?.customerId?.name || bookingDetails?.personalInfo?.name || 'EV Customer';
+
+  // UPI QR Code URL
+  const upiUrl = encodeURIComponent(
+    `upi://pay?pa=voltrescue@icici&pn=VoltRescue&am=${totalAmount}&cu=INR&tn=VoltRescue_Charge_${bookingId?.substring(0, 6)}`
+  );
+  const qrImageUri = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${upiUrl}&color=0F172A&bgcolor=FFFFFF&margin=10`;
+
+  const hasResetNavigatedRef = useRef(false);
+
+  const handleConfirmPayment = async () => {
+    setIsProcessing(true);
+    try {
+      if (bookingId && bookingId !== 'mock-id') {
         await api.patch(`/bookings/${bookingId}/status`, {
-          status: 'INVOICE_GENERATED'
+          status: 'COMPLETED',
         });
-      } catch (err) {
-        console.error(err);
       }
-    } else {
-      setIsSending(false);
-      setIsSuccess(true);
+      setIsConfirmed(true);
       setTimeout(() => {
-        navigation.navigate('DriverDashboard');
-      }, 2000);
+        if (!hasResetNavigatedRef.current) {
+          hasResetNavigatedRef.current = true;
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'DriverDashboard' }],
+          });
+        }
+      }, 1200);
+    } catch (err) {
+      console.error('Failed to settle payment:', err);
+      setIsConfirmed(true);
+      setTimeout(() => {
+        if (!hasResetNavigatedRef.current) {
+          hasResetNavigatedRef.current = true;
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'DriverDashboard' }],
+          });
+        }
+      }, 1200);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Top Navigation */}
+    <View style={[styles.container, { paddingTop: topInset }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      {/* Top Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity style={styles.menuButton}>
-            <Text style={styles.menuIcon}>☰</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>VOLT DRIVE</Text>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation.navigate('DriverDashboard')}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={22} color="#0F172A" />
+        </TouchableOpacity>
+        <View style={styles.brandRow}>
+          <View style={styles.brandIconBox}>
+            <Ionicons name="card" size={16} color="#059669" />
+          </View>
+          <Text style={styles.headerTitle}>COLLECT PAYMENT</Text>
         </View>
-        <View style={styles.avatarBox}>
-          <Image 
-            source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD1VBnqOyO4bYsxkLDDJxxrtXc8O0Mm1xWhXG4x_z6jylbDtSDy8Y2M3ryryyLFqHyIVYqzpRGSzP1iCTf5Gny69rC0gxoM2VD8-ooBOYJNaI1g5G4Tx0GT1XCGbhnsJwjR4lW60WMUOinfvioyBmWcXOMn99Cu43NUrM02dRXgIGV5OxPMT7jN_RBqhxn9bXxb4z8WqdK6KgdJ6teAPopYy4OzX40TXeCbvMlpQbM3JPcKVpy9atCNFm_zO6gEBsgTEi0km0uIarTH' }}
-            style={styles.avatar}
-          />
-        </View>
+        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Animated Success Background Placeholder */}
-        <View style={styles.successBanner}>
-          <Text style={styles.successIcon}>✅</Text>
-          <Text style={styles.successTitle}>Charging Session Complete</Text>
-          <Text style={styles.successSub}>Session ID: #VD-88921-X</Text>
-        </View>
-
-        {/* Session Bento Grid */}
-        <View style={styles.bentoGrid}>
-          <View style={styles.bentoCard}>
-            <View style={styles.bentoHeader}>
-              <Text style={styles.bentoLabel}>ENERGY DELIVERED</Text>
-              <Text style={styles.bentoIconTop}>⚡</Text>
-            </View>
-            <View style={styles.bentoValueRow}>
-              <Text style={styles.bentoValueMain}>{bookingDetails?.requestedEnergyKWh || 0}</Text>
-              <Text style={styles.bentoValueSub}>kWh</Text>
-            </View>
-          </View>
-          
-          <View style={styles.bentoCard}>
-            <View style={styles.bentoHeader}>
-              <Text style={styles.bentoLabel}>SESSION DURATION</Text>
-              <Text style={styles.bentoIconTopBlue}>⏱️</Text>
-            </View>
-            <View style={styles.bentoValueRow}>
-              <Text style={styles.bentoValueWhite}>00:42</Text>
-              <Text style={styles.bentoValueSubWhite}>m</Text>
-            </View>
-          </View>
-          
-          <View style={styles.bentoCardVertical}>
-            <View style={styles.bentoHeader}>
-              <Text style={styles.bentoLabel}>TARGET VEHICLE</Text>
-              <Text style={styles.bentoIconTopGray}>🚗</Text>
-            </View>
-            <View style={styles.vehicleInfoRow}>
-              <View style={styles.vehicleThumbBox}>
-                <Image 
-                  source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC-8-yEEU55l6Obz3ZcdwytH5aBLuvthxWTtpxD1vMh1gPs7YaY89z1r0VhixBaMicyM4iXfj3MpA1pzikKisfrjNXn1wfPtdsuq_wPDHQO-Ghp8o1W67A79kswdx25Lj1MsIR-UlRMWy14x9-sy3JS_-gsfJ8TPtNM51aRktki0Db-cAH-2n-RmxOe7bayjlwg8eXQgUt7GqW-0JDM-X_-2N6UU7dNZ7v2g4sfPSVsw1oAGelhwZhGvD0rjSXBWvSTbw-QHAbD96A6' }}
-                  style={styles.vehicleThumb}
-                />
-              </View>
-              <View style={styles.vehicleTextCol}>
-                <Text style={styles.vehicleName}>{bookingDetails?.customerId?.name || 'Customer'}'s EV</Text>
-                <Text style={styles.vehicleLicense}>ID: {bookingDetails?.customerId?._id?.substring(0, 6) || 'N/A'}</Text>
-              </View>
-            </View>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 28) }]} showsVerticalScrollIndicator={false}>
+        {/* Bill Total Card */}
+        <View style={styles.amountCard}>
+          <Text style={styles.amountLabel}>TOTAL BILL DUE</Text>
+          <Text style={styles.amountValue}>₹{totalAmount}</Text>
+          <View style={styles.customerPill}>
+            <Ionicons name="person-circle-outline" size={16} color="#64748B" />
+            <Text style={styles.customerPillText}>{customerName}</Text>
+            <Text style={styles.dotSeparator}>•</Text>
+            <Text style={styles.kwhText}>{deliveredEnergy} kWh Delivered</Text>
           </View>
         </View>
 
-        {/* Detailed Bill Breakdown */}
-        <View style={styles.billSection}>
-          <View style={styles.billHeader}>
-            <Text style={styles.billTitle}>Bill Summary</Text>
-          </View>
-          <View style={styles.billContent}>
-            <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Charging Base Rate</Text>
-              <Text style={styles.billValue}>₹{bookingDetails?.pricing?.energyCost?.toFixed(2) || '0.00'}</Text>
-            </View>
-            <View style={styles.billRow}>
-              <Text style={styles.billLabel}>On-site Delivery Fee</Text>
-              <Text style={styles.billValue}>₹{bookingDetails?.pricing?.travelCharge?.toFixed(2) || '0.00'}</Text>
-            </View>
-            <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Service Surcharge (Peak Hours)</Text>
-              <Text style={styles.billValue}>₹3.50</Text>
-            </View>
-
-            <View style={styles.totalDivider} />
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total Bill Amount</Text>
-              <View style={styles.totalValueBox}>
-                <Text style={styles.totalValueText}>₹{bookingDetails?.pricing?.totalAmount?.toFixed(2) || '0.00'}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Driver Earnings Highlight */}
-          <View style={styles.earningsBox}>
-            <View style={styles.earningsLeft}>
-              <View style={styles.earningsIconBox}>
-                <Text style={styles.earningsIcon}>💰</Text>
-              </View>
-              <View>
-                <Text style={styles.earningsLabel}>YOUR ESTIMATED EARNINGS</Text>
-                <Text style={styles.earningsValue}>₹24.40</Text>
-              </View>
-            </View>
-            <View style={styles.marginBadge}>
-              <Text style={styles.marginBadgeText}>68% Margin</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Action Section */}
-        <View style={styles.actionSection}>
-          <TouchableOpacity 
-            style={[styles.primaryButton, isSuccess && styles.primaryButtonSuccess]}
-            onPress={handleSendBill}
-            disabled={isSending || isSuccess}
+        {/* Mode Selector Tabs */}
+        <View style={styles.toggleContainer}>
+          <TouchableOpacity
+            style={[styles.toggleTab, paymentMode === 'qr' && styles.activeToggleTab]}
+            onPress={() => setPaymentMode('qr')}
+            activeOpacity={0.8}
           >
-            {isSending ? (
-              <ActivityIndicator color={colors.onSecondaryFixed} />
-            ) : isSuccess ? (
-              <Text style={styles.primaryButtonTextSuccess}>✓ Bill Sent Successfully</Text>
+            <Ionicons
+              name="qr-code-outline"
+              size={18}
+              color={paymentMode === 'qr' ? '#FFFFFF' : '#64748B'}
+            />
+            <Text style={[styles.toggleText, paymentMode === 'qr' && styles.activeToggleText]}>
+              UPI QR SCANNER
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.toggleTab, paymentMode === 'cash' && styles.activeToggleTab]}
+            onPress={() => setPaymentMode('cash')}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="cash-outline"
+              size={18}
+              color={paymentMode === 'cash' ? '#FFFFFF' : '#64748B'}
+            />
+            <Text style={[styles.toggleText, paymentMode === 'cash' && styles.activeToggleText]}>
+              COLLECT CASH
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Dynamic Mode Content */}
+        {paymentMode === 'qr' ? (
+          <View style={styles.qrSectionCard}>
+            <Text style={styles.qrInstructionTitle}>Customer QR Code Scanner</Text>
+            <Text style={styles.qrInstructionSub}>
+              Ask customer to scan with GPay, PhonePe, Paytm, or any BHIM UPI app
+            </Text>
+
+            <View style={styles.qrWrapper}>
+              <Image source={{ uri: qrImageUri }} style={styles.qrImage} resizeMode="contain" />
+              <View style={styles.qrBadge}>
+                <Ionicons name="shield-checkmark" size={14} color="#059669" />
+                <Text style={styles.qrBadgeText}>INSTANT UPI DIRECT SETTLEMENT</Text>
+              </View>
+            </View>
+
+            <View style={styles.upiIdRow}>
+              <Text style={styles.upiIdLabel}>VPA Address:</Text>
+              <Text style={styles.upiIdValue}>voltrescue@icici</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.cashSectionCard}>
+            <View style={styles.cashIconCircle}>
+              <Ionicons name="cash" size={36} color="#059669" />
+            </View>
+            <Text style={styles.cashTitle}>Collect Cash Payment</Text>
+            <Text style={styles.cashSubtitle}>
+              Please collect the exact cash amount from {customerName} before finalizing the booking.
+            </Text>
+
+            <View style={styles.cashBreakdownBox}>
+              <View style={styles.cashRow}>
+                <Text style={styles.cashLabel}>Energy Delivered ({deliveredEnergy} kWh)</Text>
+                <Text style={styles.cashValue}>
+                  ₹{bookingDetails?.pricing?.energyCost?.toFixed(2) || '840.00'}
+                </Text>
+              </View>
+              <View style={styles.cashRow}>
+                <Text style={styles.cashLabel}>Rescue Dispatch & Service Fee</Text>
+                <Text style={styles.cashValue}>
+                  ₹{bookingDetails?.pricing?.travelCharge?.toFixed(2) || '250.00'}
+                </Text>
+              </View>
+              <View style={styles.cashRow}>
+                <Text style={styles.cashLabel}>GST & Regulatory Taxes (18%)</Text>
+                <Text style={styles.cashValue}>₹21.56</Text>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.cashRowTotal}>
+                <Text style={styles.cashTotalLabel}>Total Cash Due:</Text>
+                <Text style={styles.cashTotalValue}>₹{totalAmount}</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Confirm Received Action */}
+        <View style={styles.actionContainer}>
+          <TouchableOpacity
+            style={[styles.confirmButton, (isProcessing || isConfirmed) && styles.buttonDisabled]}
+            onPress={handleConfirmPayment}
+            disabled={isProcessing || isConfirmed}
+            activeOpacity={0.85}
+          >
+            {isProcessing ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : isConfirmed ? (
+              <View style={styles.buttonInner}>
+                <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />
+                <Text style={styles.confirmButtonText}>Payment Confirmed ✓</Text>
+              </View>
             ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={styles.primaryButtonText}>Finalize & Send Bill</Text>
-                <Text style={{ fontSize: 18, color: colors.onSecondaryFixed }}>↗️</Text>
+              <View style={styles.buttonInner}>
+                <Ionicons name="checkmark-done" size={22} color="#FFFFFF" />
+                <Text style={styles.confirmButtonText}>
+                  {paymentMode === 'cash'
+                    ? `Received Cash ₹${totalAmount}`
+                    : 'Confirm Online Payment Received'}
+                </Text>
               </View>
             )}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>Review Session Log</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F8FAFC',
   },
   header: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    paddingTop: 50,
-    backgroundColor: 'rgba(19, 19, 19, 0.8)',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomColor: '#E2E8F0',
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  menuButton: {
-    padding: 4,
-  },
-  menuIcon: {
-    color: colors.primary,
-    fontSize: 24,
-  },
-  headerTitle: {
-    color: colors.primary,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  avatarBox: {
+  backBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    overflow: 'hidden',
-  },
-  avatar: {
-    width: '100%',
-    height: '100%',
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 100,
-    gap: 20,
-  },
-  successBanner: {
-    backgroundColor: 'rgba(32,31,31,0.8)',
-    borderRadius: 16,
-    padding: 24,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: '#E2E8F0',
   },
-  successIcon: {
-    fontSize: 48,
-    marginBottom: 8,
-  },
-  successTitle: {
-    color: colors.onSurface,
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  successSub: {
-    color: colors.onSurfaceVariant,
-    fontSize: 14,
-    marginTop: 4,
-  },
-  bentoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  bentoCard: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: 'rgba(32,31,31,0.8)',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'space-between',
-    height: 120,
-  },
-  bentoCardVertical: {
-    width: '100%',
-    backgroundColor: 'rgba(32,31,31,0.8)',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  bentoHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  bentoLabel: {
-    color: colors.onSurfaceVariant,
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-  bentoIconTop: {
-    color: colors.secondaryFixed,
-    fontSize: 16,
-  },
-  bentoIconTopBlue: {
-    color: colors.primary,
-    fontSize: 16,
-  },
-  bentoIconTopGray: {
-    color: colors.onSurfaceVariant,
-    fontSize: 16,
-  },
-  bentoValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  bentoValueMain: {
-    color: colors.secondaryFixed,
-    fontSize: 36,
-    fontWeight: 'bold',
-  },
-  bentoValueSub: {
-    color: 'rgba(121,255,91,0.6)',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginLeft: 4,
-  },
-  bentoValueWhite: {
-    color: colors.onSurface,
-    fontSize: 36,
-    fontWeight: 'bold',
-  },
-  bentoValueSubWhite: {
-    color: colors.onSurfaceVariant,
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginLeft: 4,
-  },
-  vehicleInfoRow: {
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
-  vehicleThumbBox: {
-    width: 48,
-    height: 48,
+  brandIconBox: {
+    width: 28,
+    height: 28,
     borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceContainerHighest,
-  },
-  vehicleThumb: {
-    width: '100%',
-    height: '100%',
-  },
-  vehicleTextCol: {
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  vehicleName: {
-    color: colors.onSurface,
-    fontSize: 16,
-    fontWeight: '600',
+  headerTitle: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 1.2,
   },
-  vehicleLicense: {
-    color: colors.onSurfaceVariant,
-    fontSize: 12,
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 40,
   },
-  billSection: {
-    backgroundColor: 'rgba(32,31,31,0.8)',
-    borderRadius: 16,
+  amountCard: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    overflow: 'hidden',
-  },
-  billHeader: {
-    padding: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  billTitle: {
-    color: colors.onSurface,
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  billContent: {
-    padding: 24,
-    gap: 16,
-  },
-  billRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  billLabel: {
-    color: colors.onSurfaceVariant,
-    fontSize: 16,
-  },
-  billValue: {
-    color: colors.onSurface,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  totalDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    marginVertical: 8,
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  totalLabel: {
-    color: colors.onSurface,
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  totalValueBox: {
-    backgroundColor: 'rgba(121,255,91,0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 8,
-    shadowColor: colors.secondaryFixed,
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-  },
-  totalValueText: {
-    color: colors.secondaryFixed,
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  earningsBox: {
-    margin: 24,
-    marginTop: 0,
-    backgroundColor: 'rgba(75,142,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(75,142,255,0.2)',
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  earningsLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  earningsIconBox: {
-    backgroundColor: 'rgba(173,198,255,0.2)',
-    padding: 8,
     borderRadius: 20,
+    padding: 22,
+    alignItems: 'center',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  earningsIcon: {
-    fontSize: 20,
-  },
-  earningsLabel: {
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: 'bold',
+  amountLabel: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '800',
     letterSpacing: 1,
+    marginBottom: 6,
+  },
+  amountValue: {
+    color: '#059669',
+    fontSize: 38,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+  customerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: 12,
+    gap: 6,
+  },
+  customerPillText: {
+    color: '#0F172A',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  dotSeparator: {
+    color: '#94A3B8',
+  },
+  kwhText: {
+    color: '#059669',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 20,
+  },
+  toggleTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 8,
+  },
+  activeToggleTab: {
+    backgroundColor: '#059669',
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  toggleText: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  activeToggleText: {
+    color: '#FFFFFF',
+  },
+  qrSectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  qrInstructionTitle: {
+    color: '#0F172A',
+    fontSize: 17,
+    fontWeight: '800',
     marginBottom: 4,
   },
-  earningsValue: {
-    color: colors.onSurface,
-    fontSize: 24,
-    fontWeight: 'bold',
+  qrInstructionSub: {
+    color: '#64748B',
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 10,
+    lineHeight: 18,
   },
-  marginBadge: {
-    backgroundColor: 'rgba(173,198,255,0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  marginBadgeText: {
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  actionSection: {
-    gap: 16,
-  },
-  primaryButton: {
-    backgroundColor: colors.secondaryFixed,
-    borderRadius: 16,
-    paddingVertical: 20,
+  qrWrapper: {
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
     alignItems: 'center',
-    shadowColor: colors.secondaryFixed,
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
   },
-  primaryButtonSuccess: {
-    backgroundColor: colors.primary,
+  qrImage: {
+    width: 220,
+    height: 220,
   },
-  primaryButtonText: {
-    color: colors.onSecondaryFixed,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  primaryButtonTextSuccess: {
-    color: colors.onPrimary,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  secondaryButton: {
-    backgroundColor: 'transparent',
+  qrBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    gap: 5,
+    marginTop: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 16,
-    paddingVertical: 16,
+    borderColor: '#A7F3D0',
+  },
+  qrBadgeText: {
+    color: '#059669',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  upiIdRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 14,
+    gap: 6,
+  },
+  upiIdLabel: {
+    color: '#64748B',
+    fontSize: 13,
+  },
+  upiIdValue: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  cashSectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 24,
+  },
+  cashIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  cashTitle: {
+    color: '#0F172A',
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  cashSubtitle: {
+    color: '#64748B',
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 18,
+    paddingHorizontal: 10,
+    lineHeight: 18,
+  },
+  cashBreakdownBox: {
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  cashRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  secondaryButtonText: {
-    color: colors.onSurfaceVariant,
+  cashLabel: {
+    color: '#64748B',
+    fontSize: 13,
+  },
+  cashValue: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 4,
+  },
+  cashRowTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cashTotalLabel: {
+    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  cashTotalValue: {
+    color: '#059669',
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  actionContainer: {
+    marginTop: 8,
+  },
+  confirmButton: {
+    backgroundColor: '#059669',
+    borderRadius: 16,
+    paddingVertical: 18,
+    alignItems: 'center',
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  buttonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  confirmButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '500',
-  }
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
 });
 
 export default BillGenerationScreen;

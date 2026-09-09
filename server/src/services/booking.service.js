@@ -9,7 +9,7 @@ const generateOTP = () => {
 };
 
 export const createBooking = async (data) => {
-  const { customerId, date, timeSlot, userLocation, connectorType, chargingType, batteryPercentage, requestedEnergyKWh, estimatedDuration, travelDistance, couponCode, paymentMethod } = data;
+  const { customerId, date, timeSlot, userLocation, personalInfo, vehicleModel, remarks, connectorType, chargingType, batteryPercentage, requestedEnergyKWh, estimatedDuration, travelDistance, couponCode, paymentMethod } = data;
 
   // Calculate pricing
   const pricing = calculatePrice(requestedEnergyKWh, travelDistance, connectorType, chargingType, couponCode);
@@ -25,6 +25,9 @@ export const createBooking = async (data) => {
       coordinates: userLocation.coordinates,
       address: userLocation.address,
     },
+    personalInfo,
+    vehicleModel: vehicleModel || 'Tata Nexon EV',
+    remarks,
     connectorType,
     chargingType,
     batteryPercentage,
@@ -42,15 +45,29 @@ export const createBooking = async (data) => {
 
 export const updateBookingStatus = async (bookingId, status, operatorId = null, extraData = {}) => {
   const validTransitions = {
-    'PENDING': ['CONFIRMED', 'VEHICLE_ASSIGNED', 'CANCELLED'],
-    'CONFIRMED': ['VEHICLE_ASSIGNED', 'CANCELLED'],
-    'VEHICLE_ASSIGNED': ['DRIVER_STARTED', 'CANCELLED', 'REJECTED'],
-    'DRIVER_STARTED': ['ARRIVING', 'CANCELLED'],
-    'ARRIVING': ['OTP_VERIFIED', 'CANCELLED'],
-    'OTP_VERIFIED': ['CHARGING_STARTED', 'CANCELLED'],
-    'CHARGING_STARTED': ['CHARGING_COMPLETED'],
-    'CHARGING_COMPLETED': ['COMPLETED'],
-    'COMPLETED': [],
+    'PENDING': ['CONFIRMED', 'VEHICLE_ASSIGNED', 'OPERATOR_ASSIGNED', 'DRIVER_STARTED', 'ARRIVING', 'OPERATOR_ARRIVED', 'CANCELLED'],
+    'CREATED': ['CONFIRMED', 'VEHICLE_ASSIGNED', 'OPERATOR_ASSIGNED', 'CANCELLED'],
+    'CONFIRMED': ['VEHICLE_ASSIGNED', 'OPERATOR_ASSIGNED', 'DRIVER_STARTED', 'ARRIVING', 'CANCELLED'],
+    'SEARCHING_OPERATOR': ['OPERATOR_ASSIGNED', 'VEHICLE_ASSIGNED', 'CANCELLED'],
+    'REQUEST_SENT': ['OPERATOR_ACCEPTED', 'VEHICLE_ASSIGNED', 'CANCELLED', 'REJECTED'],
+    'OPERATOR_ASSIGNED': ['OPERATOR_ACCEPTED', 'DRIVER_STARTED', 'OPERATOR_NAVIGATING', 'ARRIVING', 'CANCELLED'],
+    'OPERATOR_ACCEPTED': ['DRIVER_STARTED', 'OPERATOR_NAVIGATING', 'ARRIVING', 'CANCELLED'],
+    'VEHICLE_ASSIGNED': ['DRIVER_STARTED', 'OPERATOR_NAVIGATING', 'ARRIVING', 'OPERATOR_ARRIVED', 'OTP_VERIFIED', 'CANCELLED', 'REJECTED'],
+    'DRIVER_STARTED': ['OPERATOR_NAVIGATING', 'ARRIVING', 'OPERATOR_ARRIVED', 'OTP_VERIFIED', 'CHARGING_STARTED', 'CANCELLED'],
+    'OPERATOR_NAVIGATING': ['ARRIVING', 'OPERATOR_ARRIVED', 'OTP_VERIFIED', 'CHARGING_STARTED', 'CANCELLED'],
+    'ARRIVING': ['OPERATOR_ARRIVED', 'OTP_VERIFIED', 'WAITING_TO_START_CHARGING', 'CHARGING_STARTED', 'CANCELLED'],
+    'OPERATOR_ARRIVED': ['OTP_VERIFIED', 'WAITING_TO_START_CHARGING', 'CHARGING_STARTED', 'CANCELLED'],
+    'WAITING_TO_START_CHARGING': ['OTP_VERIFIED', 'CHARGING_STARTED', 'CANCELLED'],
+    'OTP_VERIFIED': ['CHARGING_STARTED', 'CHARGING_IN_PROGRESS', 'CHARGING_COMPLETED', 'CANCELLED'],
+    'CHARGING_STARTED': ['CHARGING_IN_PROGRESS', 'CHARGING_COMPLETED', 'INVOICE_GENERATED', 'CANCELLED'],
+    'CHARGING_IN_PROGRESS': ['CHARGING_COMPLETED', 'INVOICE_GENERATED', 'CANCELLED'],
+    'CHARGING_COMPLETED': ['INVOICE_GENERATED', 'PAYMENT_PENDING', 'PAYMENT_SUCCESS', 'COMPLETED', 'BOOKING_COMPLETED'],
+    'INVOICE_GENERATED': ['PAYMENT_PENDING', 'PAYMENT_SUCCESS', 'COMPLETED', 'BOOKING_COMPLETED'],
+    'PAYMENT_PENDING': ['PAYMENT_SUCCESS', 'COMPLETED', 'BOOKING_COMPLETED'],
+    'PAYMENT_SUCCESS': ['COMPLETED', 'BOOKING_COMPLETED', 'REVIEW_SUBMITTED'],
+    'COMPLETED': ['REVIEW_SUBMITTED'],
+    'BOOKING_COMPLETED': ['REVIEW_SUBMITTED'],
+    'REVIEW_SUBMITTED': [],
     'CANCELLED': [],
     'REJECTED': [],
     'EXPIRED': [],
@@ -60,6 +77,61 @@ export const updateBookingStatus = async (bookingId, status, operatorId = null, 
   const booking = await Booking.findById(bookingId);
   if (!booking) {
     throw new AppError(404, 'Booking not found');
+  }
+
+  // Idempotent: If booking is already in the requested status, return gracefully
+  if (booking.status === status) {
+    return booking;
+  }
+
+  // Define state progression order to prevent stale requests from crashing the UI
+  const STATUS_ORDER = {
+    'PENDING': 1,
+    'CREATED': 1,
+    'CONFIRMED': 2,
+    'SEARCHING_OPERATOR': 2,
+    'REQUEST_SENT': 2,
+    'OPERATOR_ASSIGNED': 3,
+    'OPERATOR_ACCEPTED': 3,
+    'VEHICLE_ASSIGNED': 3,
+    'DRIVER_STARTED': 4,
+    'OPERATOR_NAVIGATING': 4,
+    'ARRIVING': 5,
+    'OPERATOR_ARRIVED': 6,
+    'WAITING_TO_START_CHARGING': 6,
+    'OTP_VERIFIED': 7,
+    'CHARGING_STARTED': 8,
+    'CHARGING_IN_PROGRESS': 9,
+    'CHARGING_COMPLETED': 10,
+    'INVOICE_GENERATED': 11,
+    'PAYMENT_PENDING': 12,
+    'PAYMENT_SUCCESS': 13,
+    'COMPLETED': 14,
+    'BOOKING_COMPLETED': 14,
+    'REVIEW_SUBMITTED': 15,
+  };
+
+  // If already completed or in final state, don't fail subsequent completion calls
+  const finalStates = ['COMPLETED', 'BOOKING_COMPLETED', 'PAYMENT_SUCCESS'];
+  if (finalStates.includes(booking.status) && (status === 'COMPLETED' || status === 'PAYMENT_SUCCESS' || status === 'BOOKING_COMPLETED')) {
+    if (status === 'COMPLETED' && booking.status !== 'COMPLETED') {
+      booking.status = 'COMPLETED';
+      booking.timeline.completedOn = new Date();
+      await booking.save();
+    }
+    return booking;
+  }
+
+  // Stale request guard: If booking is already past the requested state in the happy path, return current booking
+  if (
+    STATUS_ORDER[booking.status] && 
+    STATUS_ORDER[status] && 
+    STATUS_ORDER[booking.status] > STATUS_ORDER[status] && 
+    status !== 'CANCELLED' && 
+    status !== 'REJECTED'
+  ) {
+    console.log(`[Status Ignored] Booking ${bookingId} is already at ${booking.status}; ignoring stale request for ${status}`);
+    return booking;
   }
 
   const allowedNextStates = validTransitions[booking.status];

@@ -3,11 +3,11 @@ import { View, Text, StyleSheet, Animated, PanResponder, Dimensions } from 'reac
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
-const BUTTON_HEIGHT = 64;
-const THUMB_SIZE = 56;
+const BUTTON_HEIGHT = 60;
+const THUMB_SIZE = 52;
 const PADDING = 4;
-const TRACK_WIDTH = Dimensions.get('window').width - 48; // Assumes 24 padding on each side
-const MAX_SWIPE = TRACK_WIDTH - THUMB_SIZE - (PADDING * 2);
+const TRACK_WIDTH = Dimensions.get('window').width - 48;
+const MAX_SWIPE = TRACK_WIDTH - THUMB_SIZE - PADDING * 2;
 
 interface SwipeButtonProps {
   onSwipeSuccess: () => void;
@@ -29,18 +29,17 @@ const SwipeButton: React.FC<SwipeButtonProps> = ({ onSwipeSuccess, text, success
       },
       onPanResponderRelease: (_, gesture) => {
         if (isSwiped) return;
-        
-        if (gesture.dx >= MAX_SWIPE * 0.8) { // 80% swipe completes it
+
+        if (gesture.dx >= MAX_SWIPE * 0.8) {
           Animated.timing(pan, {
             toValue: { x: MAX_SWIPE, y: 0 },
             duration: 150,
-            useNativeDriver: false, // width/layout animations cannot use native driver easily with panResponder in this setup
+            useNativeDriver: false,
           }).start(() => {
             setIsSwiped(true);
             onSwipeSuccess();
           });
         } else {
-          // Snap back
           Animated.spring(pan, {
             toValue: { x: 0, y: 0 },
             friction: 5,
@@ -51,7 +50,6 @@ const SwipeButton: React.FC<SwipeButtonProps> = ({ onSwipeSuccess, text, success
     })
   ).current;
 
-  // Opacity of the background text fades out as you swipe
   const textOpacity = pan.x.interpolate({
     inputRange: [0, MAX_SWIPE / 2],
     outputRange: [1, 0],
@@ -63,18 +61,12 @@ const SwipeButton: React.FC<SwipeButtonProps> = ({ onSwipeSuccess, text, success
       <Animated.Text style={[styles.text, { opacity: isSwiped ? 1 : textOpacity }]}>
         {isSwiped ? successText : text}
       </Animated.Text>
-      
-      <Animated.View
-        style={[
-          styles.thumb,
-          { transform: [{ translateX: pan.x }] },
-        ]}
-        {...panResponder.panHandlers}
-      >
-        <Ionicons 
-          name={isSwiped ? "checkmark" : "chevron-forward-outline"} 
-          size={32} 
-          color={isSwiped ? colors.secondaryFixed : "#fff"} 
+
+      <Animated.View style={[styles.thumb, { transform: [{ translateX: pan.x }] }]} {...panResponder.panHandlers}>
+        <Ionicons
+          name={isSwiped ? 'checkmark' : 'chevron-forward'}
+          size={28}
+          color="#FFFFFF"
         />
       </Animated.View>
     </View>
@@ -85,7 +77,7 @@ const styles = StyleSheet.create({
   container: {
     width: TRACK_WIDTH,
     height: BUTTON_HEIGHT,
-    backgroundColor: '#333', // Track color
+    backgroundColor: '#F1F5F9',
     borderRadius: BUTTON_HEIGHT / 2,
     justifyContent: 'center',
     alignItems: 'center',
@@ -93,12 +85,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
     marginTop: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
   },
   text: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    letterSpacing: 2,
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 1.5,
     position: 'absolute',
     zIndex: 1,
   },
@@ -108,15 +102,16 @@ const styles = StyleSheet.create({
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
-    backgroundColor: colors.secondaryContainer, // Default thumb color
+    backgroundColor: '#059669',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 2,
-    shadowColor: '#000',
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
-    shadowRadius: 5,
+    shadowRadius: 4,
     elevation: 4,
-  }
+  },
 });
 
 export default SwipeButton;
