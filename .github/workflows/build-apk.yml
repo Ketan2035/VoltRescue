@@ -34,19 +34,27 @@ jobs:
         working-directory: ./client
         run: npx expo prebuild --platform android --clean
 
-      - name: 🔑 Configure Android Signing for Direct Sideloading
+      - name: 🔑 Configure Release Signing with Debug Keystore
         working-directory: ./client/android
         run: |
-          sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/g' app/build.gradle || true
+          node -e "
+            const fs = require('fs');
+            const file = 'app/build.gradle';
+            let c = fs.readFileSync(file, 'utf8');
+            c = c.replace(/\/\/\s*signingConfig\s+signingConfigs\.release/g, 'signingConfig signingConfigs.debug');
+            c = c.replace(/signingConfig\s+signingConfigs\.release/g, 'signingConfig signingConfigs.debug');
+            fs.writeFileSync(file, c);
+            console.log('✅ Updated app/build.gradle for standalone release build');
+          "
 
-      - name: 🔨 Build Debug & Release APKs via Gradle
+      - name: 🔨 Build Standalone Release APK via Gradle
         working-directory: ./client/android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
       - name: 🚀 Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VoltRescue-Android-APK
-          path: client/android/app/build/outputs/apk/debug/*.apk
+          name: VoltRescue-Standalone-APK
+          path: client/android/app/build/outputs/apk/release/*.apk
