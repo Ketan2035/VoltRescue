@@ -11,7 +11,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { colors } from '../../theme/colors';
@@ -143,6 +143,7 @@ const CustomerDashboardScreen = ({ navigation }: any) => {
         <MapView
           ref={mapRef}
           provider={PROVIDER_DEFAULT}
+          mapType="none"
           style={styles.map}
           initialRegion={{
             latitude: 37.785834,
@@ -154,6 +155,12 @@ const CustomerDashboardScreen = ({ navigation }: any) => {
           showsMyLocationButton={false}
           showsCompass={false}
         >
+          <UrlTile
+            urlTemplate="https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+            maximumZ={19}
+            flipY={false}
+            zIndex={-1}
+          />
           {userLocation && (
             <Marker coordinate={userLocation} title="Your Location">
               <View style={styles.userMarkerPin}>

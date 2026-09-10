@@ -13,7 +13,7 @@ import {
   Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../services/api';
@@ -525,6 +525,7 @@ const DriverDashboardScreen = ({ navigation }: any) => {
             <MapView
               ref={driverMapRef}
               provider={PROVIDER_DEFAULT}
+              mapType="none"
               style={styles.mapView}
               initialRegion={{
                 latitude: currentLocation.coords.latitude,
@@ -534,6 +535,12 @@ const DriverDashboardScreen = ({ navigation }: any) => {
               }}
               showsUserLocation={false}
             >
+              <UrlTile
+                urlTemplate="https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+                maximumZ={19}
+                flipY={false}
+                zIndex={-1}
+              />
               <Marker
                 coordinate={{
                   latitude: currentLocation.coords.latitude,

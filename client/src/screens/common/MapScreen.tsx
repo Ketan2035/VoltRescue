@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import api from '../../services/api';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 
 const MapScreen = ({ navigation }: any) => {
@@ -138,10 +138,17 @@ const MapScreen = ({ navigation }: any) => {
         <MapView
           ref={mapRef}
           provider={PROVIDER_DEFAULT}
+          mapType="none"
           style={StyleSheet.absoluteFillObject}
           initialRegion={mapRegion}
           showsUserLocation={true}
         >
+          <UrlTile
+            urlTemplate="https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+            maximumZ={19}
+            flipY={false}
+            zIndex={-1}
+          />
           {userLocation && (
             <Marker coordinate={userLocation} title="Your Breakdown Location">
               <View style={styles.userMarker}>

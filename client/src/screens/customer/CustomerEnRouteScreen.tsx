@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
 import { useBookingState } from '../../hooks/useBookingState';
 import api from '../../services/api';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, Polyline, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useSocket } from '../../contexts/SocketContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -226,6 +226,7 @@ const CustomerEnRouteScreen = ({ route, navigation }: any) => {
           ref={mapRef}
           style={styles.mapImage}
           provider={PROVIDER_DEFAULT}
+          mapType="none"
           initialRegion={{
             latitude: customerLocation?.latitude || 37.7749,
             longitude: customerLocation?.longitude || -122.4194,
@@ -236,6 +237,12 @@ const CustomerEnRouteScreen = ({ route, navigation }: any) => {
           showsMyLocationButton={false}
           showsCompass={false}
         >
+          <UrlTile
+            urlTemplate="https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+            maximumZ={19}
+            flipY={false}
+            zIndex={-1}
+          />
           {/* Real Turn-by-Turn Road Route Polylines (Glow + Main Road) */}
           {routeCoordinates.length > 0 ? (
             <>

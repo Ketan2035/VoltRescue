@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBookingState } from '../../hooks/useBookingState';
 import api from '../../services/api';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, Polyline, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useSocket } from '../../contexts/SocketContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -298,6 +298,7 @@ const DriverEnRouteScreen = ({ route, navigation }: any) => {
         <MapView
           ref={mapRef}
           provider={PROVIDER_DEFAULT}
+          mapType="none"
           style={styles.mapImage}
           initialRegion={{
             latitude: operatorLocation?.latitude || customerLocation?.latitude || 12.9716,
@@ -306,8 +307,14 @@ const DriverEnRouteScreen = ({ route, navigation }: any) => {
             longitudeDelta: 0.04,
           }}
           showsCompass={false}
-          showsTraffic={true}
+          showsTraffic={false}
         >
+          <UrlTile
+            urlTemplate="https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+            maximumZ={19}
+            flipY={false}
+            zIndex={-1}
+          />
           {/* Customer Location Pin */}
           {customerLocation && (
             <Marker coordinate={customerLocation} title="Breakdown Site">
