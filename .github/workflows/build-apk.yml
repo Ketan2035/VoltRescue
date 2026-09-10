@@ -34,12 +34,19 @@ jobs:
         working-directory: ./client
         run: npx expo prebuild --platform android --clean
 
-      - name: 🔨 Build Release APK via Gradle
+      - name: 🔑 Configure Android Signing for Direct Sideloading
         working-directory: ./client/android
-        run: ./gradlew assembleRelease --no-daemon
+        run: |
+          sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/g' app/build.gradle || true
+
+      - name: 🔨 Build Debug & Release APKs via Gradle
+        working-directory: ./client/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
       - name: 🚀 Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VoltRescue-Release-APK
-          path: client/android/app/build/outputs/apk/release/*.apk
+          name: VoltRescue-Android-APK
+          path: client/android/app/build/outputs/apk/debug/*.apk

@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import api from '../../services/api';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 
 const MapScreen = ({ navigation }: any) => {
@@ -137,7 +137,7 @@ const MapScreen = ({ navigation }: any) => {
       <View style={styles.mapArea}>
         <MapView
           ref={mapRef}
-          provider={PROVIDER_GOOGLE}
+          provider={PROVIDER_DEFAULT}
           style={StyleSheet.absoluteFillObject}
           initialRegion={mapRegion}
           showsUserLocation={true}

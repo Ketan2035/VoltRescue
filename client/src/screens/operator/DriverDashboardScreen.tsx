@@ -13,7 +13,7 @@ import {
   Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../services/api';
@@ -524,7 +524,7 @@ const DriverDashboardScreen = ({ navigation }: any) => {
           {currentLocation ? (
             <MapView
               ref={driverMapRef}
-              provider={PROVIDER_GOOGLE}
+              provider={PROVIDER_DEFAULT}
               style={styles.mapView}
               initialRegion={{
                 latitude: currentLocation.coords.latitude,
