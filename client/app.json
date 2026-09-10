@@ -42,7 +42,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow VoltRescue to use your location to dispatch roadside charging vans."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {
