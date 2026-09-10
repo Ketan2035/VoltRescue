@@ -59,9 +59,16 @@ const CustomerDashboardScreen = ({ navigation }: any) => {
       let lat = 37.785834;
 
       if (status === 'granted') {
-        const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        lng = location.coords.longitude;
-        lat = location.coords.latitude;
+        try {
+          const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          if (location && location.coords) {
+            lng = location.coords.longitude;
+            lat = location.coords.latitude;
+          }
+        } catch (locErr) {
+          console.log('Location acquisition fallback:', locErr);
+        }
+
         const newCoords = { latitude: lat, longitude: lng };
         setUserLocation(newCoords);
 

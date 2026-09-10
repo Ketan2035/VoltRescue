@@ -17,6 +17,11 @@
     },
     "android": {
       "package": "com.voltrescue.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyVoltRescueDefaultAndroidMapsKey00"
+        }
+      },
       "adaptiveIcon": {
         "backgroundColor": "#ECFDF5",
         "foregroundImage": "./assets/android-icon-foreground.png",
