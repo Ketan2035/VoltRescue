@@ -32,6 +32,8 @@ jobs:
 
       - name: ⚙️ Generate Native Android Project (Expo Prebuild)
         working-directory: ./client
+        env:
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: npx expo prebuild --platform android --clean
 
       - name: 🔑 Configure Release Signing with Debug Keystore
