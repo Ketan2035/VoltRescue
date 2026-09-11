@@ -298,7 +298,7 @@ const DriverEnRouteScreen = ({ route, navigation }: any) => {
         <MapView
           ref={mapRef}
           provider={PROVIDER_DEFAULT}
-          mapType="none"
+          mapType="standard"
           style={styles.mapImage}
           initialRegion={{
             latitude: operatorLocation?.latitude || customerLocation?.latitude || 12.9716,
@@ -309,13 +309,6 @@ const DriverEnRouteScreen = ({ route, navigation }: any) => {
           showsCompass={false}
           showsTraffic={false}
         >
-          <UrlTile
-            urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-            maximumZ={19}
-            flipY={false}
-            shouldReplaceMapContent={true}
-            zIndex={-1}
-          />
           {/* Customer Location Pin */}
           {customerLocation && (
             <Marker coordinate={customerLocation} title="Breakdown Site">

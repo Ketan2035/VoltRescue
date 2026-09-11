@@ -138,18 +138,11 @@ const MapScreen = ({ navigation }: any) => {
         <MapView
           ref={mapRef}
           provider={PROVIDER_DEFAULT}
-          mapType="none"
+          mapType="standard"
           style={StyleSheet.absoluteFillObject}
           initialRegion={mapRegion}
           showsUserLocation={true}
         >
-          <UrlTile
-            urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-            maximumZ={19}
-            flipY={false}
-            shouldReplaceMapContent={true}
-            zIndex={-1}
-          />
           {userLocation && (
             <Marker coordinate={userLocation} title="Your Breakdown Location">
               <View style={styles.userMarker}>

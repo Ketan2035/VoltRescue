@@ -525,7 +525,7 @@ const DriverDashboardScreen = ({ navigation }: any) => {
             <MapView
               ref={driverMapRef}
               provider={PROVIDER_DEFAULT}
-              mapType="none"
+              mapType="standard"
               style={styles.mapView}
               initialRegion={{
                 latitude: currentLocation.coords.latitude,
@@ -535,13 +535,6 @@ const DriverDashboardScreen = ({ navigation }: any) => {
               }}
               showsUserLocation={false}
             >
-              <UrlTile
-                urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-                maximumZ={19}
-                flipY={false}
-                shouldReplaceMapContent={true}
-                zIndex={-1}
-              />
               <Marker
                 coordinate={{
                   latitude: currentLocation.coords.latitude,

@@ -232,7 +232,7 @@ const CustomerEnRouteScreen = ({ route, navigation }: any) => {
           ref={mapRef}
           style={styles.mapImage}
           provider={PROVIDER_DEFAULT}
-          mapType="none"
+          mapType="standard"
           initialRegion={{
             latitude: customerLocation?.latitude || 37.7749,
             longitude: customerLocation?.longitude || -122.4194,
@@ -243,13 +243,6 @@ const CustomerEnRouteScreen = ({ route, navigation }: any) => {
           showsMyLocationButton={false}
           showsCompass={false}
         >
-          <UrlTile
-            urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-            maximumZ={19}
-            flipY={false}
-            shouldReplaceMapContent={true}
-            zIndex={-1}
-          />
           {/* Real Turn-by-Turn Road Route Polylines (Glow + Main Road) */}
           {routeCoordinates.length > 0 ? (
             <>
