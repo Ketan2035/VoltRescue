@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { colors } from '../../theme/colors';
 import api from '../../services/api';
+import { useActiveBooking } from '../../contexts/ActiveBookingContext';
 
 const { width } = Dimensions.get('window');
 
@@ -130,7 +131,20 @@ const CustomerDashboardScreen = ({ navigation }: any) => {
     }
   };
 
+  const { activeBooking, getMatchingScreen } = useActiveBooking();
+
+  const handleResumeActive = () => {
+    const match = getMatchingScreen(false);
+    if (match) {
+      navigation.navigate(match.screenName, match.params);
+    }
+  };
+
   const handleBookNow = () => {
+    if (activeBooking) {
+      handleResumeActive();
+      return;
+    }
     navigation.navigate('BookingWizard', { serviceType: selectedService });
   };
 
@@ -159,6 +173,7 @@ const CustomerDashboardScreen = ({ navigation }: any) => {
             urlTemplate="https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
             maximumZ={19}
             flipY={false}
+            shouldReplaceMapContent={true}
             zIndex={-1}
           />
           {userLocation && (
@@ -326,6 +341,26 @@ const CustomerDashboardScreen = ({ navigation }: any) => {
       {/* Bottom Sheet Card */}
       <View style={[styles.bottomSheet, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
         <View style={styles.dragHandle} />
+
+        {/* Persistent Active Rescue Card if in progress */}
+        {activeBooking && (
+          <TouchableOpacity
+            style={styles.activeRescueBanner}
+            onPress={handleResumeActive}
+            activeOpacity={0.88}
+          >
+            <View style={styles.activeRescueIcon}>
+              <Ionicons name="flash" size={18} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.activeRescueTitle}>Active Rescue in Progress</Text>
+              <Text style={styles.activeRescueSub}>
+                Status: {activeBooking.status.replace(/_/g, ' ')} • Tap to view tracking
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#059669" />
+          </TouchableOpacity>
+        )}
 
         {/* Dispatch Availability Banner */}
         <View style={styles.dispatchBanner}>
@@ -756,16 +791,51 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  btnRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   primaryActionText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  btnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  activeRescueBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1.5,
+    borderColor: '#059669',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  activeRescueIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#059669',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeRescueTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+  activeRescueSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#059669',
+    marginTop: 2,
   },
 });
 

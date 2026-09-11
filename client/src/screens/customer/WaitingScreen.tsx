@@ -22,11 +22,19 @@ const WaitingScreen = ({ route, navigation }: any) => {
   const insets = useSafeAreaInsets();
   const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0) + 12;
   const { bookingId } = route.params || {};
-  const { status } = useBookingState(bookingId);
+  const { activeBooking, syncActiveBooking } = useBookingState(bookingId);
 
   const [nearbyCount, setNearbyCount] = useState<number | string>(3);
   const [eta, setEta] = useState<string>('6-10 mins');
   const [secondsElapsed, setSecondsElapsed] = useState(0);
+
+  // Periodic active state reconciliation while searching
+  useEffect(() => {
+    const syncInterval = setInterval(() => {
+      syncActiveBooking();
+    }, 4000);
+    return () => clearInterval(syncInterval);
+  }, [syncActiveBooking]);
 
   // Handle hardware back button to return to home page
   useEffect(() => {
@@ -52,22 +60,25 @@ const WaitingScreen = ({ route, navigation }: any) => {
 
   // Auto-navigate when an operator accepts
   useEffect(() => {
-    const currentSt = status;
+    const currentSt = activeBooking?.status;
+    const targetBookingId = activeBooking?._id || bookingId;
     if (
       currentSt === 'OPERATOR_ACCEPTED' ||
       currentSt === 'VEHICLE_ASSIGNED' ||
+      currentSt === 'DRIVER_STARTED' ||
+      currentSt === 'OPERATOR_NAVIGATING' ||
       currentSt === 'ARRIVING' ||
       currentSt === 'OPERATOR_ARRIVED' ||
       currentSt === 'OTP_VERIFIED'
     ) {
-      navigation.navigate('CustomerEnRoute', { bookingId });
+      navigation.replace('CustomerEnRoute', { bookingId: targetBookingId });
     } else if (
       currentSt === 'CHARGING_STARTED' ||
       currentSt === 'CHARGING_IN_PROGRESS'
     ) {
-      navigation.navigate('LiveCharging', { bookingId });
+      navigation.replace('LiveCharging', { bookingId: targetBookingId });
     }
-  }, [status, bookingId, navigation]);
+  }, [activeBooking?.status, activeBooking?._id, bookingId, navigation]);
 
   // Elapsed timer ticker
   useEffect(() => {

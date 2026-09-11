@@ -43,6 +43,87 @@ export const createBooking = async (data) => {
   return booking;
 };
 
+export const ACTIVE_BOOKING_STATUSES = [
+  'PENDING',
+  'CREATED',
+  'CONFIRMED',
+  'SEARCHING_OPERATOR',
+  'REQUEST_SENT',
+  'OPERATOR_ASSIGNED',
+  'OPERATOR_ACCEPTED',
+  'VEHICLE_ASSIGNED',
+  'DRIVER_STARTED',
+  'OPERATOR_NAVIGATING',
+  'ARRIVING',
+  'OPERATOR_ARRIVED',
+  'WAITING_TO_START_CHARGING',
+  'OTP_VERIFIED',
+  'CHARGING_STARTED',
+  'CHARGING_IN_PROGRESS',
+  'CHARGING_COMPLETED',
+  'INVOICE_GENERATED',
+  'PAYMENT_PENDING',
+];
+
+export const acceptBookingAtomic = async (bookingId, operatorId) => {
+  const openStatuses = ['PENDING', 'CREATED', 'CONFIRMED', 'SEARCHING_OPERATOR', 'REQUEST_SENT'];
+  const updated = await Booking.findOneAndUpdate(
+    {
+      _id: bookingId,
+      status: { $in: openStatuses },
+      $or: [{ operatorId: null }, { operatorId: { $exists: false } }],
+    },
+    {
+      $set: {
+        operatorId,
+        status: 'VEHICLE_ASSIGNED',
+        'timeline.operatorAssignedOn': new Date(),
+      },
+      $inc: { version: 1 },
+    },
+    { new: true }
+  )
+    .populate('operatorId', 'name phone vehicleDetails location rating profileImageUrl')
+    .populate('customerId', 'name phone');
+
+  if (!updated) {
+    const existing = await Booking.findById(bookingId)
+      .populate('operatorId', 'name phone vehicleDetails location rating profileImageUrl')
+      .populate('customerId', 'name phone');
+    if (existing && existing.operatorId?._id?.toString() === operatorId.toString()) {
+      return existing;
+    }
+    throw new AppError(409, 'This rescue request has already been accepted by another technician or is no longer available.');
+  }
+
+  if (operatorId) {
+    await Operator.findByIdAndUpdate(operatorId, {
+      currentBookingId: bookingId,
+      status: 'BUSY',
+    });
+  }
+
+  return updated;
+};
+
+export const getActiveBookingForCustomer = async (customerId) => {
+  return await Booking.findOne({
+    customerId,
+    status: { $in: ACTIVE_BOOKING_STATUSES },
+  })
+    .sort({ createdAt: -1 })
+    .populate('operatorId', 'name phone vehicleDetails location rating profileImageUrl');
+};
+
+export const getActiveBookingForOperator = async (operatorId) => {
+  return await Booking.findOne({
+    operatorId,
+    status: { $in: ACTIVE_BOOKING_STATUSES },
+  })
+    .sort({ createdAt: -1 })
+    .populate('customerId', 'name phone');
+};
+
 export const updateBookingStatus = async (bookingId, status, operatorId = null, extraData = {}) => {
   const validTransitions = {
     'PENDING': ['CONFIRMED', 'VEHICLE_ASSIGNED', 'OPERATOR_ASSIGNED', 'DRIVER_STARTED', 'ARRIVING', 'OPERATOR_ARRIVED', 'CANCELLED'],
@@ -116,6 +197,7 @@ export const updateBookingStatus = async (bookingId, status, operatorId = null, 
   if (finalStates.includes(booking.status) && (status === 'COMPLETED' || status === 'PAYMENT_SUCCESS' || status === 'BOOKING_COMPLETED')) {
     if (status === 'COMPLETED' && booking.status !== 'COMPLETED') {
       booking.status = 'COMPLETED';
+      booking.version = (booking.version || 1) + 1;
       booking.timeline.completedOn = new Date();
       await booking.save();
     }
@@ -183,6 +265,7 @@ export const updateBookingStatus = async (bookingId, status, operatorId = null, 
   }
 
   booking.status = status;
+  booking.version = (booking.version || 1) + 1;
   await booking.save();
   
   // Free up operator if completed or cancelled
@@ -190,7 +273,9 @@ export const updateBookingStatus = async (bookingId, status, operatorId = null, 
      await Operator.findByIdAndUpdate(booking.operatorId, { currentBookingId: null, status: 'ONLINE' });
   }
 
-  return booking;
+  return await Booking.findById(booking._id)
+    .populate('operatorId', 'name phone vehicleDetails location rating profileImageUrl')
+    .populate('customerId', 'name phone');
 };
 
 export const getBookingDetails = async (bookingId) => {

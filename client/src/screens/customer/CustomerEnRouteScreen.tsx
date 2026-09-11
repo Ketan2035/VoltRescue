@@ -146,8 +146,14 @@ const CustomerEnRouteScreen = ({ route, navigation }: any) => {
       navigation.navigate('StartCharging', { bookingId, isOperator: false });
     } else if (currentSt === 'CHARGING_STARTED' || currentSt === 'CHARGING_IN_PROGRESS') {
       navigation.navigate('LiveCharging', { bookingId });
-    } else if (currentSt === 'INVOICE_GENERATED' || currentSt === 'CHARGING_COMPLETED') {
+    } else if (currentSt === 'INVOICE_GENERATED' || currentSt === 'CHARGING_COMPLETED' || currentSt === 'PAYMENT_PENDING') {
       navigation.navigate('Payment', { bookingId });
+    } else if (currentSt === 'CANCELLED' || currentSt === 'REJECTED') {
+      Alert.alert('Booking Cancelled', 'This rescue session was cancelled.');
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'CustomerDashboard' }],
+      });
     }
   }, [status, bookingDetails?.status, bookingId, navigation]);
 
@@ -241,6 +247,7 @@ const CustomerEnRouteScreen = ({ route, navigation }: any) => {
             urlTemplate="https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
             maximumZ={19}
             flipY={false}
+            shouldReplaceMapContent={true}
             zIndex={-1}
           />
           {/* Real Turn-by-Turn Road Route Polylines (Glow + Main Road) */}

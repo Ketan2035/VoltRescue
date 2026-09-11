@@ -11,6 +11,7 @@ import {
   ScrollView,
   Easing,
   Linking,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
@@ -265,9 +266,17 @@ const IncomingRequestsScreen = ({ route, navigation }: any) => {
         status: 'VEHICLE_ASSIGNED',
       });
       navigation.replace('EnRoute', { bookingId: request.bookingId });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to accept request:', error);
-      navigation.replace('EnRoute', { bookingId: request.bookingId });
+      if (error?.response?.status === 409) {
+        Alert.alert(
+          'Request Unavailable',
+          error.response?.data?.message || 'This rescue request has already been assigned to another technician.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      } else {
+        navigation.replace('EnRoute', { bookingId: request.bookingId });
+      }
     }
   };
 

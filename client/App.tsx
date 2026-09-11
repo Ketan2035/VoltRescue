@@ -31,6 +31,7 @@ import SupportScreen from './src/screens/common/SupportScreen';
 import ChatScreen from './src/screens/common/ChatScreen';
 import { SocketProvider } from './src/contexts/SocketContext';
 import { ProfileProvider } from './src/contexts/ProfileContext';
+import { ActiveBookingProvider } from './src/contexts/ActiveBookingContext';
 
 const Stack = createNativeStackNavigator();
 
@@ -39,8 +40,9 @@ export default function App() {
     <SafeAreaProvider>
       <ProfileProvider>
         <SocketProvider>
-          <NavigationContainer>
-            <StatusBar style="dark" backgroundColor="#FFFFFF" />
+          <ActiveBookingProvider>
+            <NavigationContainer>
+              <StatusBar style="dark" backgroundColor="#FFFFFF" />
             <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
               <Stack.Screen name="Welcome" component={WelcomeScreen} />
               <Stack.Screen name="CustomerDashboard" component={CustomerDashboardScreen} />
@@ -70,7 +72,8 @@ export default function App() {
               <Stack.Screen name="DriverJobHistory" component={DriverJobHistoryScreen} />
               <Stack.Screen name="DriverVehicle" component={DriverVehicleScreen} />
             </Stack.Navigator>
-          </NavigationContainer>
+            </NavigationContainer>
+          </ActiveBookingProvider>
         </SocketProvider>
       </ProfileProvider>
     </SafeAreaProvider>

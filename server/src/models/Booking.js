@@ -141,6 +141,10 @@ const bookingSchema = new mongoose.Schema(
       score: { type: Number, min: 1, max: 5 },
       review: String,
     },
+    version: {
+      type: Number,
+      default: 1,
+    },
     timeline: {
       createdOn: { type: Date, default: Date.now },
       confirmedOn: { type: Date },
@@ -157,6 +161,9 @@ const bookingSchema = new mongoose.Schema(
 );
 
 bookingSchema.index({ userLocation: '2dsphere' });
+bookingSchema.index({ customerId: 1, status: 1 });
+bookingSchema.index({ operatorId: 1, status: 1 });
+bookingSchema.index({ status: 1, createdAt: -1 });
 
 const Booking = mongoose.model('Booking', bookingSchema);
 export default Booking;

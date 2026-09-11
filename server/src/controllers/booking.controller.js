@@ -77,38 +77,69 @@ export const create = async (req, res, next) => {
   }
 };
 
+export const getActiveBooking = async (req, res, next) => {
+  try {
+    const customerId = req.customerId || req.guestId;
+    const operatorId = req.operatorId;
+
+    let booking = null;
+    if (operatorId) {
+      booking = await bookingService.getActiveBookingForOperator(operatorId);
+    } else if (customerId) {
+      booking = await bookingService.getActiveBookingForCustomer(customerId);
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: { booking: booking || null },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const updateStatus = async (req, res, next) => {
   try {
     const { bookingId } = req.params;
     const { status, otp, deliveredEnergyKWh, cancellationReason } = req.body;
     const operatorId = req.operatorId;
 
-    // If accepting, check slot availability
+    let booking;
     if (status === 'VEHICLE_ASSIGNED' && operatorId) {
-      const booking = await bookingService.getBookingDetails(bookingId);
-      if (booking.timeSlot && booking.timeSlot.start) {
-         const availability = await checkSlotAvailability(operatorId, booking.date, booking.timeSlot.start, booking.timeSlot.end, bookingId);
-         if (!availability.isAvailable) {
-           // TEMPORARILY DISABLED FOR PROTOTYPE TESTING
-           // throw new AppError(400, `Cannot accept booking: ${availability.reason}`);
-           console.log(`[TESTING] Ignored overlap check: ${availability.reason}`);
-         }
-      }
+      booking = await bookingService.acceptBookingAtomic(bookingId, operatorId);
+    } else {
+      const extraData = { otp, deliveredEnergyKWh, cancellationReason };
+      booking = await bookingService.updateBookingStatus(bookingId, status, operatorId, extraData);
     }
 
-    const extraData = { otp, deliveredEnergyKWh, cancellationReason };
-    const booking = await bookingService.updateBookingStatus(bookingId, status, operatorId, extraData);
-
     const io = getIO();
-    io.to(`booking_${bookingId}`).emit('booking_status_update', {
-      bookingId,
-      status,
-      operatorId,
-      booking
-    });
+    const payload = {
+      bookingId: booking._id.toString(),
+      status: booking.status,
+      paymentStatus: booking.paymentStatus,
+      operatorId: booking.operatorId?._id?.toString() || booking.operatorId?.toString() || null,
+      customerId: booking.customerId?._id?.toString() || booking.customerId?.toString() || null,
+      version: booking.version || 1,
+      timeline: booking.timeline,
+      booking,
+      timestamp: new Date().toISOString(),
+    };
+
+    // 1. Emit to booking-specific room
+    io.to(`booking_${bookingId}`).emit('booking_status_update', payload);
+
+    // 2. Also emit to customer's direct room if available
+    if (payload.customerId) {
+      io.to(`customer_${payload.customerId}`).emit('booking_status_update', payload);
+    }
+
+    // 3. Also emit to operator's direct room
+    if (payload.operatorId) {
+      io.to(`operator_${payload.operatorId}`).emit('booking_status_update', payload);
+    }
 
     if (status === 'VEHICLE_ASSIGNED') {
-      io.emit('booking_assigned', { bookingId });
+      io.emit('booking_assigned', { bookingId: booking._id.toString() });
     }
 
     res.status(200).json({

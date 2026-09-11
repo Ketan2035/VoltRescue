@@ -11,6 +11,7 @@ router.use(protect); // Require auth (JWT or GuestSession) for all booking route
 // Note: Validators might need to be updated to match the new schema. 
 // For now, we point to the controller directly or update validator later.
 router.post('/', bookingController.create); // Removed validate temporarily to avoid schema mismatch
+router.get('/active', bookingController.getActiveBooking);
 router.get('/customer', bookingController.getCustomerBookings);
 router.get('/operator', bookingController.getOperatorBookings);
 router.get('/availability', bookingController.getAvailability);

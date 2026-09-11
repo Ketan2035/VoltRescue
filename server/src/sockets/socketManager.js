@@ -10,39 +10,56 @@ export const initSocketManager = (server) => {
       origin: '*', // Restrict to your domain in production
       methods: ['GET', 'POST'],
     },
+    pingInterval: 10000,
+    pingTimeout: 5000,
   });
 
-  // Optional auth middleware — guests connect without a token
+  // Auth middleware
   io.use((socket, next) => {
     try {
       const token = socket.handshake.auth.token;
+      const guestId = socket.handshake.auth.guestId || socket.handshake.headers?.['x-guest-session-id'];
 
       if (token) {
-        // Operator connecting with JWT
-        const decoded = jwt.verify(token, env.JWT_SECRET);
-        socket.operatorId = decoded.id;
-        socket.isOperator = true;
+        try {
+          const decoded = jwt.verify(token, env.JWT_SECRET);
+          socket.operatorId = decoded.id;
+          socket.isOperator = true;
+        } catch {
+          socket.isGuest = true;
+        }
       } else {
-        // Guest customer — allowed without token
         socket.isGuest = true;
       }
 
+      if (guestId) {
+        socket.guestId = guestId;
+      }
+
       next();
-    } catch (err) {
-      // Invalid token — still allow as guest, don't block
+    } catch {
       socket.isGuest = true;
       next();
     }
   });
 
   io.on('connection', (socket) => {
-    console.log(`🔌 New client connected: ${socket.id} (${socket.isOperator ? 'Operator: ' + socket.operatorId : 'Guest'})`);
+    console.log(
+      `🔌 [SOCKET CONNECTED]: ${socket.id} (Operator: ${socket.operatorId || 'No'}, Guest: ${socket.guestId || 'No'})`
+    );
 
-    // Auto-join operator specific room if they are an operator
+    // Auto-join operator specific room if verified operator
     if (socket.isOperator && socket.operatorId) {
       const operatorRoom = `operator_${socket.operatorId}`;
       socket.join(operatorRoom);
-      console.log(`Socket ${socket.id} auto-joined: ${operatorRoom}`);
+      console.log(`[SOCKET ROOM]: ${socket.id} auto-joined: ${operatorRoom}`);
+    }
+
+    // Auto-join customer/guest specific room if provided
+    if (socket.guestId) {
+      const customerRoom = `customer_${socket.guestId}`;
+      socket.join(customerRoom);
+      console.log(`[SOCKET ROOM]: ${socket.id} auto-joined: ${customerRoom}`);
     }
 
     socket.on('register_operator', (tokenOrId) => {
@@ -56,31 +73,43 @@ export const initSocketManager = (server) => {
           socket.operatorId = opId;
           socket.isOperator = true;
           socket.join(`operator_${opId}`);
-          console.log(`Socket ${socket.id} explicitly registered operator room: operator_${opId}`);
+          console.log(`[SOCKET ROOM]: ${socket.id} registered operator room: operator_${opId}`);
         }
       } catch (e) {
         console.error('Error registering operator on socket:', e.message);
       }
     });
 
+    socket.on('register_customer', (customerIdOrGuestId) => {
+      if (customerIdOrGuestId) {
+        socket.guestId = customerIdOrGuestId;
+        socket.join(`customer_${customerIdOrGuestId}`);
+        console.log(`[SOCKET ROOM]: ${socket.id} registered customer room: customer_${customerIdOrGuestId}`);
+      }
+    });
+
     socket.on('join_room', (room) => {
-      socket.join(room);
-      console.log(`Socket ${socket.id} joined room: ${room}`);
+      if (room) {
+        socket.join(room);
+        console.log(`[SOCKET ROOM JOIN]: ${socket.id} joined room: ${room}`);
+      }
     });
 
     socket.on('leave_room', (room) => {
-      socket.leave(room);
-      console.log(`Socket ${socket.id} left room: ${room}`);
+      if (room) {
+        socket.leave(room);
+        console.log(`[SOCKET ROOM LEAVE]: ${socket.id} left room: ${room}`);
+      }
     });
 
     socket.on('operator_location_update', (data) => {
       const { bookingId, location } = data;
       if (bookingId && location) {
-        // Broadcast to everyone in the booking room (e.g. the customer)
         io.to(`booking_${bookingId}`).emit('operator_location_update', {
           bookingId,
           location,
-          operatorId: socket.operatorId
+          operatorId: socket.operatorId,
+          timestamp: new Date().toISOString(),
         });
       }
     });
@@ -88,25 +117,20 @@ export const initSocketManager = (server) => {
     socket.on('send_message', (data) => {
       const { bookingId, text, senderId, senderName, timestamp, isOperator } = data;
       if (bookingId && text) {
-        // Broadcast to everyone in the booking room EXCEPT the sender
-        // To keep it simple and ensure the sender sees it too (if they re-connect), 
-        // we emit to the whole room. The client will handle deduplication if needed, 
-        // or the client can just rely on local state for their own messages.
-        // Actually, let's just use socket.to() to send to others in the room.
         socket.to(`booking_${bookingId}`).emit('receive_message', {
-          id: Math.random().toString(36).substring(7), // Simple unique ID
+          id: Math.random().toString(36).substring(7),
           bookingId,
           text,
           senderId,
           senderName,
           timestamp: timestamp || new Date().toISOString(),
-          isOperator
+          isOperator,
         });
       }
     });
 
-    socket.on('disconnect', () => {
-      console.log(`Client disconnected: ${socket.id}`);
+    socket.on('disconnect', (reason) => {
+      console.log(`🔌 [SOCKET DISCONNECTED]: ${socket.id}, reason: ${reason}`);
     });
   });
 

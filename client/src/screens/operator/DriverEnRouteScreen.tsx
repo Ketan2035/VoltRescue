@@ -313,6 +313,7 @@ const DriverEnRouteScreen = ({ route, navigation }: any) => {
             urlTemplate="https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
             maximumZ={19}
             flipY={false}
+            shouldReplaceMapContent={true}
             zIndex={-1}
           />
           {/* Customer Location Pin */}
